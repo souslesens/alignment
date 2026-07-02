@@ -127,16 +127,16 @@ var AlignementMakeSimilars = (function () {
 
                         item.hits.hits.forEach(function (hit) {
                             var nToWord = hit._source.label.split(" ").length;
-                            if (nFromWord == nToWord) {
-                               ;
-                            } //same number of words
+                            if (nFromWord >= nToWord) {
+                               
+                                //keep targets with at most as many words as the source term
                                 if (!similars[fromWord]) {
                                     similars[fromWord] = {}
                                 }
                                 similars[fromWord][hit._source.id] = {
                                     label: hit._source.label, score: hit._score
                                 }
-
+                            }
 
                         })
                         if (!similars[fromWord]) {
