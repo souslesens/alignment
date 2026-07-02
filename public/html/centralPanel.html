@@ -84,8 +84,12 @@
                     </div>
                 </div>
 
-                <!-- Alignment bot panel (step bubbles: "Generate equivalent classes", etc.) -->
+                <!-- Alignment bot panel (step bubbles: "view non exact match", etc.) -->
                 <div id="Alignement_botDiv" style="margin-top:10px;"></div>
+
+                <!-- Standalone action (validation step only): generate equivalentClass for the currently
+                     checked exact matches. Idempotent, does NOT advance the bot to the non-exact step. -->
+                <div id="Alignement_generateEquivBtnDiv" style="display:none;margin-top:10px;"></div>
             </div>
 
             <!-- RIGHT (framed area): every step result renders here, full height, not stacked at the bottom -->

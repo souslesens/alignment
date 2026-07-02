@@ -67,6 +67,7 @@ var Alignement_bot = (function () {
             source: null,
             targetSource: null,
             validationDivId: "Alignement_validationDiv",
+            generateEquivBtnDivId: "Alignement_generateEquivBtnDiv",
             nonExactDivId: "Alignement_nonExactDiv",
             aiDivId: "Alignement_aiDiv",
             aiEquivDivId: "Alignement_aiEquivDiv",
@@ -99,8 +100,8 @@ var Alignement_bot = (function () {
             splitFn: {
                 showValidationFn: {
                     _OR: {
-                        "Generate equivalent classes": {
-                            generateEquivalentClassFn: {
+                        "view non exact match": {
+                            viewNonExactFn: {
                                 showNonExactFn: {
                                     _OR: {
                                         "AI treatment": {
@@ -140,7 +141,7 @@ var Alignement_bot = (function () {
         startFn: "Label alignment",
         splitFn: "Split exact / non-exact (case + plural)",
         showValidationFn: "Validate exact matches (uncheck to exclude)",
-        generateEquivalentClassFn: "Generate equivalent classes",
+        viewNonExactFn: "View non-exact matches",
         showNonExactFn: "Show non-exact matches",
         buildDefinitionsFn: "Build class definitions (for LLM)",
         aiTreatmentFn: "AI treatment (classify non-exacts)",
@@ -179,23 +180,17 @@ var Alignement_bot = (function () {
             AlignementWorkflow.renderValidation(self.params.validationDivId, self.params.exact, headerInfo, function () {
                 self.myBotEngine.nextStep();
             });
+            // Standalone button: generate equivalentClass for the checked exact matches (idempotent),
+            // decoupled from advancing the bot. Belongs to the validation step only.
+            AlignementWorkflow.renderGenerateEquivButton(self.params.generateEquivBtnDivId, self.params.source);
         },
-        generateEquivalentClassFn: function () {
+        viewNonExactFn: function () {
+            // Only navigation: demote the unchecked exact pairs to non-exacts and move to the non-exact step.
+            // equivalentClass creation is now done by the standalone "generate equivalent class" button.
             var split = AlignementWorkflow.getValidatedSplit(self.params.validationDivId);
-            // Unchecked exact pairs are demoted to non-exacts.
             self.params.nonExact = self.params.nonExact.concat(split.unchecked);
-            AlignementWorkflow.generateEquivalentClasses(self.params.source, split.checked, function (err, insertedCount) {
-                if (err) {
-                    var message = err.message;
-                    if (!message) {
-                        message = err;
-                    }
-                    window.UI.message("Error inserting equivalentClass: " + message, true);
-                    return;
-                }
-                window.UI.message(insertedCount + " equivalent classes generated in " + self.params.source, true);
-                self.myBotEngine.nextStep();
-            });
+            $("#" + self.params.generateEquivBtnDivId).hide();
+            self.myBotEngine.nextStep();
         },
         showNonExactFn: function () {
             hideOtherStepSections(self.params.nonExactDivId);

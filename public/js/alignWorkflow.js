@@ -14,6 +14,9 @@ var AlignementWorkflow = (function () {
 
     self._pairByNodeId = {};
     self._validationDivId = null;
+    // equivalentClass pairs already created in this session (key = srcUri + NODE_ID_SEPARATOR + tgtUri),
+    // so the standalone "generate equivalent class" button only creates the missing ones on repeated clicks.
+    self._createdEquivKeys = {};
     // Definitions of the non-exact classes, fetched from SousLeSens: { from: [{uri,label,definition}], target: [...] }
     self.definitions = null;
 
@@ -145,6 +148,8 @@ var AlignementWorkflow = (function () {
     self.renderValidation = function (divId, exactPairs, headerInfo, onReady) {
         self._validationDivId = divId;
         self._pairByNodeId = {};
+        // A fresh validation (new "list similars") starts idempotency tracking from scratch.
+        self._createdEquivKeys = {};
         // Reveal this step's section (hidden by default so steps appear in sequence).
         $("#" + divId).parent().show();
 
@@ -253,6 +258,78 @@ var AlignementWorkflow = (function () {
             }
             callback(null, triples.length);
         });
+    };
+
+    /**
+     * Like generateEquivalentClasses but idempotent across clicks: pairs already created in this session
+     * (tracked in self._createdEquivKeys) are skipped, so clicking the button twice only creates the new ones.
+     * @param {string} source - The source whose graph receives the triples.
+     * @param {Array} pairs - Checked pairs with srcUri / tgtUri.
+     * @param {function} callback - callback(err, { created, skipped }).
+     * @returns {void}
+     */
+    self.generateEquivalentClassesIdempotent = function (source, pairs, callback) {
+        var pairsToCreate = [];
+        var skippedCount = 0;
+        (pairs || []).forEach(function (pair) {
+            if (!pair.srcUri || !pair.tgtUri) {
+                return;
+            }
+            var key = pair.srcUri + NODE_ID_SEPARATOR + pair.tgtUri;
+            if (self._createdEquivKeys[key]) {
+                skippedCount += 1;
+                return;
+            }
+            pairsToCreate.push(pair);
+        });
+        if (pairsToCreate.length === 0) {
+            return callback(null, { created: 0, skipped: skippedCount });
+        }
+        self.generateEquivalentClasses(source, pairsToCreate, function (err, insertedCount) {
+            if (err) {
+                return callback(err);
+            }
+            pairsToCreate.forEach(function (pair) {
+                var key = pair.srcUri + NODE_ID_SEPARATOR + pair.tgtUri;
+                self._createdEquivKeys[key] = 1;
+            });
+            callback(null, { created: insertedCount, skipped: skippedCount });
+        });
+    };
+
+    /**
+     * Renders the standalone "generate equivalent class" button. Its ONLY action is to create
+     * owl:equivalentClass triples for the currently-checked exact pairs; it does NOT advance the bot.
+     * Idempotent: repeated clicks only create pairs not already created in this session.
+     * @param {string} divId - The button container div id.
+     * @param {string} source - The source whose graph receives the triples.
+     * @returns {void}
+     */
+    self.renderGenerateEquivButton = function (divId, source) {
+        var buttonId = divId + "_btn";
+        $("#" + divId)
+            .html("<button id='" + buttonId + "'>generate equivalent class</button>")
+            .show();
+        $("#" + buttonId)
+            .off("click")
+            .on("click", function () {
+                var split = self.getValidatedSplit();
+                self.generateEquivalentClassesIdempotent(source, split.checked, function (err, result) {
+                    if (err) {
+                        var message = err.message;
+                        if (!message) {
+                            message = err;
+                        }
+                        window.UI.message("Error inserting equivalentClass: " + message, true);
+                        return;
+                    }
+                    var message = result.created + " equivalent classes created";
+                    if (result.skipped > 0) {
+                        message += " (" + result.skipped + " already created, skipped)";
+                    }
+                    window.UI.message(message + " in " + source, true);
+                });
+            });
     };
 
     /**
