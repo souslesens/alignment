@@ -11,6 +11,9 @@ var AlignementWorkflow = (function () {
 
     var OWL_EQUIVALENT_CLASS = "http://www.w3.org/2002/07/owl#equivalentClass";
     var NODE_ID_SEPARATOR = " ||| ";
+    // Left-panel (framed zone) container for the AI-step action buttons (save/export), kept out of the
+    // result panel so the result list can use the full height.
+    var AI_STEP_BUTTONS_DIV_ID = "Alignement_aiStepBtnDiv";
 
     self._pairByNodeId = {};
     self._validationDivId = null;
@@ -150,6 +153,8 @@ var AlignementWorkflow = (function () {
         self._pairByNodeId = {};
         // A fresh validation (new "list similars") starts idempotency tracking from scratch.
         self._createdEquivKeys = {};
+        // Hide the AI-step action buttons from any previous run (they belong to later steps).
+        $("#" + AI_STEP_BUTTONS_DIV_ID).hide();
         // Reveal this step's section (hidden by default so steps appear in sequence).
         $("#" + divId).parent().show();
 
@@ -785,23 +790,29 @@ var AlignementWorkflow = (function () {
                 saveLabel = options.saveLabel;
             }
         }
-        var html = "";
+        // Right (framed) panel: title + column header + full-height tree. The two action buttons go to the
+        // left panel (AI_STEP_BUTTONS_DIV_ID) so the list can use the full height.
+        var html = "<div style='display:flex;flex-direction:column;height:100%;'>";
         if (title) {
-            html += "<div style='margin-bottom:4px;font-weight:bold;'>" + escapeHtml(title) + " (" + pairs.length + ")</div>";
+            html += "<div style='margin-bottom:4px;font-weight:bold;flex:0 0 auto;'>" + escapeHtml(title) + " (" + pairs.length + ")</div>";
         }
         // Column header aligned with the jstree node columns (left padding for the checkbox + icon).
-        html += "<div style='font-weight:bold;border-bottom:1px solid #ccc;padding:2px 0 2px 44px;'>";
+        html += "<div style='font-weight:bold;border-bottom:1px solid #ccc;padding:2px 0 2px 44px;flex:0 0 auto;'>";
         html += "<span style='display:inline-block;min-width:200px'>" + escapeHtml(sourceName) + "</span>";
         html += "<span style='display:inline-block;min-width:200px'>" + escapeHtml(targetName) + "</span>";
         html += "<span style='display:inline-block;min-width:140px'>type</span>";
         html += "<span>reason</span>";
         html += "</div>";
-        html += "<div id='" + treeDivId + "' style='max-height:280px;overflow:auto;'></div>";
-        html += "<div style='margin-top:6px;'>";
-        html += "<button id='" + saveBtnId + "' style='margin-right:6px;'>" + escapeHtml(saveLabel) + "</button>";
-        html += "<button id='" + exportBtnId + "'>Exporter (CSV)</button>";
+        html += "<div id='" + treeDivId + "' style='flex:1 1 auto;min-height:0;overflow:auto;'></div>";
         html += "</div>";
         $("#" + divId).html(html);
+
+        // Left panel (framed zone): the two action buttons.
+        var buttonsHtml = "<button id='" + saveBtnId + "' style='margin-right:6px;'>" + escapeHtml(saveLabel) + "</button>";
+        buttonsHtml += "<button id='" + exportBtnId + "'>Exporter (CSV)</button>";
+        $("#" + AI_STEP_BUTTONS_DIV_ID)
+            .html(buttonsHtml)
+            .show();
 
         // Save / Export act on the current selection WITHOUT advancing (advancing is a bot-bubble step).
         $("#" + saveBtnId)
@@ -912,7 +923,6 @@ var AlignementWorkflow = (function () {
         var fromName = fromSource || "source";
         var targetName = targetSource || "target";
         var html = "<div style='margin-bottom:4px;font-weight:bold;'>Reste à exporter (Not match / Unknown / Other / décochés) — " + pairs.length + " lignes</div>";
-        html += "<div style='margin-bottom:6px;'><button id='" + exportBtnId + "'>Exporter (CSV)</button></div>";
         html += "<table style='border-collapse:collapse;width:100%;'><thead><tr>";
         html += "<th style='text-align:left;border-bottom:1px solid #ccc;'>" + escapeHtml(fromName) + "</th>";
         html += "<th style='text-align:left;border-bottom:1px solid #ccc;'>" + escapeHtml(targetName) + "</th>";
@@ -927,6 +937,11 @@ var AlignementWorkflow = (function () {
         });
         html += "</tbody></table>";
         $("#" + divId).html(html);
+
+        // Left panel (framed zone): the export button.
+        $("#" + AI_STEP_BUTTONS_DIV_ID)
+            .html("<button id='" + exportBtnId + "'>Exporter (CSV)</button>")
+            .show();
         $("#" + exportBtnId)
             .off("click")
             .on("click", function () {
