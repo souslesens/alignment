@@ -1,0 +1,135 @@
+<style>
+    .browseRightPanel {
+        width: 800px;
+        height: 600px;
+    }
+    /* make tab: two columns — left = source/target trees + bot bubbles, right (framed) = step results */
+    #Alignement_makeSimilarsTab {
+        overflow: hidden;
+        height: 760px;
+    }
+    #Alignement_makeLeftPanel {
+        flex: 0 0 auto;
+        overflow: auto;
+    }
+    /* framed zone: every step result renders here and fills the whole available height */
+    #Alignement_makeResultsPanel {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        margin-left: 15px;
+        min-width: 400px;
+        border: 1px solid #bbb;
+        border-radius: 4px;
+        padding: 8px;
+    }
+    /* one result section per step; the visible one stretches over the full height */
+    .Alignement_resultSection {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    /* the scrollable result box grows to fill its section (no fixed max-height) */
+    .Alignement_resultBox {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+    }
+    #Alignement_makeSimilarsTab #Alignement_sourceContainersDiv,
+    #Alignement_makeSimilarsTab #Alignement_targetContainersDiv {
+        width: 380px;
+        height: 260px;
+        overflow: auto;
+    }
+</style>
+
+<div id="Alignement_centralPanelDiv" style="display: flex; flex-direction: row; width: 100%; height: 800px">
+    <div id="Alignement_rightPanelTabs">
+        <ul>
+            <li class="nodeInfosWidget_tabDiv"><a href="#anorama_hitDetailsTab">details</a></li>
+            <li class="nodeInfosWidget_tabDiv"><a href="#Alignement_overviewTab">overview</a></li>
+            <li class="nodeInfosWidget_tabDiv"><a href="#Alignement_makeSimilarsTab">make</a></li>
+
+            <!--  <li class="nodeInfosWidget_tabDiv"><a href="#Alignement_tableTab">Table</a></li>-->
+        </ul>
+
+        <div id="Alignement_hitDetailsTab">
+            <div id="Alignement_hitDetailsDiv" class="Alignement_hitDetail" class="browseRightPanel"
+                 style="min-width: 800px; overflow: auto"></div>
+        </div>
+        <div id="Alignement_overviewTab">
+
+        </div>
+        <div id="Alignement_makeSimilarsTab" style="display:flex;flex-direction: row">
+            <!-- LEFT: source/target trees + alignment bot control bubbles -->
+            <div id="Alignement_makeLeftPanel" style="display:flex;flex-direction: column">
+                <div style="display:flex;flex-direction: row">
+                    <div>
+                        <div>
+                            <button onclick="Alignement.openSource()">choose source</button>
+
+                            <button onclick="Alignement.listSimilars()">list similars</button>
+                        </div>
+                        <div id="Alignement_sourceContainersDiv" class="browseRightPanel"></div>
+                    </div>
+
+                    <div>
+                        <div>
+                           <!-- <button onclick="Alignement.openSource()">choose source</button>-->
+                            UNSPSC
+                        </div>
+                        <div id="Alignement_targetContainersDiv" class="browseRightPanel"></div>
+                    </div>
+                </div>
+
+                <!-- Alignment bot panel (step bubbles: "Generate equivalent classes", etc.) -->
+                <div id="Alignement_botDiv" style="margin-top:10px;"></div>
+            </div>
+
+            <!-- RIGHT (framed area): every step result renders here, full height, not stacked at the bottom -->
+            <div id="Alignement_makeResultsPanel">
+                <!-- Step "Validate exact matches" (flat 2 columns): revealed after "list similars" -->
+                <div class="Alignement_resultSection" style="display:none;margin-top:10px;">
+                    <b>Exact matches — uncheck to exclude</b>
+                    <div id="Alignement_validationHeader" style="font-weight:bold;border-bottom:1px solid #999;padding:2px 0 2px 40px;"></div>
+                    <div id="Alignement_validationDiv" class="Alignement_resultBox" style="border:1px solid #ddd;padding:5px;"></div>
+                </div>
+
+                <!-- Step "Non-exact matches" (grouped by source): revealed after "Generate equivalent classes" -->
+                <div class="Alignement_resultSection" style="display:none;margin-top:10px;">
+                    <b>Non-exact matches (to LLM)</b>
+                    <div id="Alignement_nonExactDiv" class="Alignement_resultBox" style="border:1px solid #ddd;padding:5px;"></div>
+                </div>
+
+                <!-- Step "AI treatment": revealed after the definitions are built (LLM classification result) -->
+                <div class="Alignement_resultSection" style="display:none;margin-top:10px;">
+                    <b>AI treatment (classified non-exacts)</b>
+                    <div id="Alignement_aiDiv" class="Alignement_resultBox" style="border:1px solid #ddd;padding:5px;"></div>
+                </div>
+
+                <!-- Step "Equivalent class (Exact match AI)": jstree pre-checked + Save / Export -->
+                <div class="Alignement_resultSection" style="display:none;margin-top:10px;">
+                    <b>Equivalent class (Exact match AI)</b>
+                    <div id="Alignement_aiEquivDiv" class="Alignement_resultBox" style="border:1px solid #ddd;padding:5px;"></div>
+                </div>
+
+                <!-- Step "Subclass / inverse subclass": jstree pre-checked + Save / Export -->
+                <div class="Alignement_resultSection" style="display:none;margin-top:10px;">
+                    <b>Subclass of / inverse subclass of</b>
+                    <div id="Alignement_aiSubclassDiv" class="Alignement_resultBox" style="border:1px solid #ddd;padding:5px;"></div>
+                </div>
+
+                <!-- Step "Remaining (export only)": Not match / Unknown / Other / unchecked -->
+                <div class="Alignement_resultSection" style="display:none;margin-top:10px;">
+                    <b>Remaining (export)</b>
+                    <div id="Alignement_aiRemainingDiv" class="Alignement_resultBox" style="border:1px solid #ddd;padding:5px;"></div>
+                </div>
+            </div>
+        </div>
+        <!--   <div id="Alignement_tableTab">
+               <div id="Alignement_tableDiv" class="browseRightPanel"></div>
+           </div>-->
+    </div>
+</div>
