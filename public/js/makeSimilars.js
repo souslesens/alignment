@@ -127,9 +127,9 @@ var AlignementMakeSimilars = (function () {
 
                         item.hits.hits.forEach(function (hit) {
                             var nToWord = hit._source.label.split(" ").length;
-                            if (nFromWord <= nToWord) {
+                            if (nFromWord >= nToWord) {
                                
-                                //keep targets with at least as many words as the source term
+                                //keep targets with at most as many words as the source term
                                 if (!similars[fromWord]) {
                                     similars[fromWord] = {}
                                 }
