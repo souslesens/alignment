@@ -245,12 +245,16 @@ var Alignement_bot = (function () {
             // "generate subclass of and inverse subclass of" advances to the subclass step (no save required).
             var onSave = function (treeDivId) {
                 var split = AlignementWorkflow.getAiCheckSplit(treeDivId);
-                AlignementWorkflow.generateEquivalentClasses(self.params.source, self.params.targetSource, split.checked, function (err, insertedCount) {
+                AlignementWorkflow.generateEquivalentClassesIdempotent(self.params.source, self.params.targetSource, split.checked, function (err, result) {
                     if (err) {
                         window.UI.message("Error inserting equivalentClass: " + (err.message || err), true);
                         return;
                     }
-                    window.UI.message(insertedCount + " equivalent classes generated in graph " + self.params.source + "/" + self.params.targetSource, true);
+                    var message = result.created + " equivalent classes created";
+                    if (result.skipped > 0) {
+                        message += " (" + result.skipped + " already created, skipped)";
+                    }
+                    window.UI.message(message + " in graph " + self.params.source + "/" + self.params.targetSource, true);
                 });
             };
             var onExport = function (treeDivId) {
@@ -288,12 +292,16 @@ var Alignement_bot = (function () {
 
             var onSave = function (treeDivId) {
                 var split = AlignementWorkflow.getAiCheckSplit(treeDivId);
-                AlignementWorkflow.generateSubClasses(self.params.source, self.params.targetSource, split.checked, function (err, insertedCount) {
+                AlignementWorkflow.generateSubClassesIdempotent(self.params.source, self.params.targetSource, split.checked, function (err, result) {
                     if (err) {
                         window.UI.message("Error inserting subClassOf: " + (err.message || err), true);
                         return;
                     }
-                    window.UI.message(insertedCount + " subClassOf triples generated in graph " + self.params.source + "/" + self.params.targetSource, true);
+                    var message = result.created + " subClassOf triples created";
+                    if (result.skipped > 0) {
+                        message += " (" + result.skipped + " already created, skipped)";
+                    }
+                    window.UI.message(message + " in graph " + self.params.source + "/" + self.params.targetSource, true);
                 });
             };
             var onExport = function (treeDivId) {

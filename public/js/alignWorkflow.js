@@ -34,6 +34,9 @@ var AlignementWorkflow = (function () {
     // equivalentClass pairs already created in this session (key = srcUri + NODE_ID_SEPARATOR + tgtUri),
     // so the standalone "generate equivalent class" button only creates the missing ones on repeated clicks.
     self._createdEquivKeys = {};
+    // Same session tracking for the rdfs:subClassOf triples of the AI subclass step
+    // (key = actual triple direction: subject + NODE_ID_SEPARATOR + object).
+    self._createdSubClassKeys = {};
     // Definitions of the non-exact classes, fetched from SousLeSens: { from: [{uri,label,definition}], target: [...] }
     self.definitions = null;
 
@@ -167,6 +170,7 @@ var AlignementWorkflow = (function () {
         self._pairByNodeId = {};
         // A fresh validation (new "list similars") starts idempotency tracking from scratch.
         self._createdEquivKeys = {};
+        self._createdSubClassKeys = {};
         // Hide the AI-step action buttons from any previous run (they belong to later steps).
         $("#" + AI_STEP_BUTTONS_DIV_ID).hide();
         // Reveal this step's section (hidden by default so steps appear in sequence).
@@ -880,6 +884,56 @@ var AlignementWorkflow = (function () {
                 return callback(err);
             }
             callback(null, triples.length);
+        });
+    };
+
+    /**
+     * Tracking key of the rdfs:subClassOf triple a pair will produce (its direction depends on the
+     * AI category: "SubclassOf inverse" swaps subject and object).
+     * @param {Object} pair - Pair with srcUri / tgtUri / category.
+     * @returns {string} The session-tracking key (subject + separator + object).
+     */
+    function subClassTripleKey(pair) {
+        var category = String(pair.category || "").trim().toLowerCase();
+        if (category === "subclassof inverse") {
+            return pair.tgtUri + NODE_ID_SEPARATOR + pair.srcUri;
+        }
+        return pair.srcUri + NODE_ID_SEPARATOR + pair.tgtUri;
+    }
+
+    /**
+     * Like generateSubClasses but idempotent across clicks: triples already created in this session
+     * (tracked in self._createdSubClassKeys) are skipped, so clicking twice only creates the new ones.
+     * @param {string} fromSource - Source-from name (source 1).
+     * @param {string} targetSource - Target source name (source 2).
+     * @param {Array} pairs - Checked pairs with srcUri / tgtUri / category.
+     * @param {function} callback - callback(err, { created, skipped }).
+     * @returns {void}
+     */
+    self.generateSubClassesIdempotent = function (fromSource, targetSource, pairs, callback) {
+        var pairsToCreate = [];
+        var skippedCount = 0;
+        (pairs || []).forEach(function (pair) {
+            if (!pair.srcUri || !pair.tgtUri) {
+                return;
+            }
+            if (self._createdSubClassKeys[subClassTripleKey(pair)]) {
+                skippedCount += 1;
+                return;
+            }
+            pairsToCreate.push(pair);
+        });
+        if (pairsToCreate.length === 0) {
+            return callback(null, { created: 0, skipped: skippedCount });
+        }
+        self.generateSubClasses(fromSource, targetSource, pairsToCreate, function (err, insertedCount) {
+            if (err) {
+                return callback(err);
+            }
+            pairsToCreate.forEach(function (pair) {
+                self._createdSubClassKeys[subClassTripleKey(pair)] = 1;
+            });
+            callback(null, { created: insertedCount, skipped: skippedCount });
         });
     };
 
