@@ -182,7 +182,7 @@ var Alignement_bot = (function () {
             });
             // Standalone button: generate equivalentClass for the checked exact matches (idempotent),
             // decoupled from advancing the bot. Belongs to the validation step only.
-            AlignementWorkflow.renderGenerateEquivButton(self.params.generateEquivBtnDivId, self.params.source);
+            AlignementWorkflow.renderGenerateEquivButton(self.params.generateEquivBtnDivId, self.params.source, self.params.targetSource);
         },
         viewNonExactFn: function () {
             // Only navigation: demote the unchecked exact pairs to non-exacts and move to the non-exact step.
@@ -245,12 +245,12 @@ var Alignement_bot = (function () {
             // "generate subclass of and inverse subclass of" advances to the subclass step (no save required).
             var onSave = function (treeDivId) {
                 var split = AlignementWorkflow.getAiCheckSplit(treeDivId);
-                AlignementWorkflow.generateEquivalentClasses(self.params.source, split.checked, function (err, insertedCount) {
+                AlignementWorkflow.generateEquivalentClasses(self.params.source, self.params.targetSource, split.checked, function (err, insertedCount) {
                     if (err) {
                         window.UI.message("Error inserting equivalentClass: " + (err.message || err), true);
                         return;
                     }
-                    window.UI.message(insertedCount + " equivalent classes generated in " + self.params.source, true);
+                    window.UI.message(insertedCount + " equivalent classes generated in graph " + self.params.source + "/" + self.params.targetSource, true);
                 });
             };
             var onExport = function (treeDivId) {
@@ -288,12 +288,12 @@ var Alignement_bot = (function () {
 
             var onSave = function (treeDivId) {
                 var split = AlignementWorkflow.getAiCheckSplit(treeDivId);
-                AlignementWorkflow.generateSubClasses(self.params.source, split.checked, function (err, insertedCount) {
+                AlignementWorkflow.generateSubClasses(self.params.source, self.params.targetSource, split.checked, function (err, insertedCount) {
                     if (err) {
                         window.UI.message("Error inserting subClassOf: " + (err.message || err), true);
                         return;
                     }
-                    window.UI.message(insertedCount + " subClassOf triples generated in " + self.params.source, true);
+                    window.UI.message(insertedCount + " subClassOf triples generated in graph " + self.params.source + "/" + self.params.targetSource, true);
                 });
             };
             var onExport = function (treeDivId) {
