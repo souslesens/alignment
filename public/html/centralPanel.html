@@ -3,23 +3,36 @@
         width: 800px;
         height: 600px;
     }
-    /* make tab: two columns — left = source/target trees + bot bubbles, right (framed) = step results */
+    /* make tab: full-width column — container trees on top, bot controls, then the results panel */
     #Alignement_makeSimilarsTab {
         overflow: hidden;
         height: 760px;
     }
-    #Alignement_makeLeftPanel {
-        flex: 0 0 auto;
+    /* the two container trees share the whole tab width (half each) */
+    #Alignement_makeSimilarsTab #Alignement_sourceContainersDiv,
+    #Alignement_makeSimilarsTab #Alignement_targetContainersDiv {
+        width: 100%;
+        height: 280px;
         overflow: auto;
     }
-    /* framed zone: every step result renders here and fills the whole available height */
+    /* bot bubbles + step action buttons: bounded height so the results panel keeps its room */
+    #Alignement_makeControlsRow {
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        column-gap: 15px;
+        flex: 0 0 auto;
+        max-height: 170px;
+        overflow: auto;
+    }
+    /* framed zone: every step result renders here, full width and remaining height */
     #Alignement_makeResultsPanel {
         flex: 1 1 auto;
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        margin-left: 15px;
-        min-width: 400px;
+        margin-top: 10px;
+        min-height: 0;
         border: 1px solid #bbb;
         border-radius: 4px;
         padding: 8px;
@@ -37,53 +50,36 @@
         min-height: 0;
         overflow: auto;
     }
-    #Alignement_makeSimilarsTab #Alignement_sourceContainersDiv,
-    #Alignement_makeSimilarsTab #Alignement_targetContainersDiv {
-        width: 380px;
-        height: 260px;
-        overflow: auto;
-    }
 </style>
 
 <div id="Alignement_centralPanelDiv" style="display: flex; flex-direction: row; width: 100%; height: 800px">
     <div id="Alignement_rightPanelTabs">
         <ul>
-            <li class="nodeInfosWidget_tabDiv"><a href="#anorama_hitDetailsTab">details</a></li>
-            <li class="nodeInfosWidget_tabDiv"><a href="#Alignement_overviewTab">overview</a></li>
             <li class="nodeInfosWidget_tabDiv"><a href="#Alignement_makeSimilarsTab">make</a></li>
-
-            <!--  <li class="nodeInfosWidget_tabDiv"><a href="#Alignement_tableTab">Table</a></li>-->
         </ul>
 
-        <div id="Alignement_hitDetailsTab">
-            <div id="Alignement_hitDetailsDiv" class="Alignement_hitDetail" class="browseRightPanel"
-                 style="min-width: 800px; overflow: auto"></div>
-        </div>
-        <div id="Alignement_overviewTab">
+        <div id="Alignement_makeSimilarsTab" style="display:flex;flex-direction: column">
+            <!-- Top action buttons -->
+            <div style="flex:0 0 auto;">
+                <button onclick="Alignement.openSource()">choose source</button>
 
-        </div>
-        <div id="Alignement_makeSimilarsTab" style="display:flex;flex-direction: row">
-            <!-- LEFT: source/target trees + alignment bot control bubbles -->
-            <div id="Alignement_makeLeftPanel" style="display:flex;flex-direction: column">
-                <div style="display:flex;flex-direction: row">
-                    <div>
-                        <div>
-                            <button onclick="Alignement.openSource()">choose source</button>
+                <button onclick="Alignement.listSimilars()">list similars</button>
+            </div>
 
-                            <button onclick="Alignement.listSimilars()">list similars</button>
-                        </div>
-                        <div id="Alignement_sourceContainersDiv" class="browseRightPanel"></div>
-                    </div>
-
-                    <div>
-                        <div>
-                           <!-- <button onclick="Alignement.openSource()">choose source</button>-->
-                            UNSPSC
-                        </div>
-                        <div id="Alignement_targetContainersDiv" class="browseRightPanel"></div>
-                    </div>
+            <!-- Container trees over the full width: source (left half) | UNSPSC (right half) -->
+            <div style="display:flex;flex-direction:row;flex:0 0 auto;margin-top:6px;">
+                <div style="flex:1 1 50%;min-width:0;">
+                    <div id="Alignement_sourceContainersDiv" class="browseRightPanel"></div>
                 </div>
 
+                <div style="flex:1 1 50%;min-width:0;margin-left:10px;">
+                    <div>UNSPSC</div>
+                    <div id="Alignement_targetContainersDiv" class="browseRightPanel"></div>
+                </div>
+            </div>
+
+            <!-- Bot bubbles + step action buttons -->
+            <div id="Alignement_makeControlsRow">
                 <!-- Alignment bot panel (step bubbles: "view non exact match", etc.) -->
                 <div id="Alignement_botDiv" style="margin-top:10px;"></div>
 
@@ -92,11 +88,11 @@
                 <div id="Alignement_generateEquivBtnDiv" style="display:none;margin-top:10px;"></div>
 
                 <!-- Action buttons for the AI validation steps (equivalent class AI / subclass / remaining):
-                     save + export, kept on the left so the result list can use the full height. -->
+                     save + export, kept out of the result panel so the result list can use the full height. -->
                 <div id="Alignement_aiStepBtnDiv" style="display:none;margin-top:10px;"></div>
             </div>
 
-            <!-- RIGHT (framed area): every step result renders here, full height, not stacked at the bottom -->
+            <!-- Results panel (framed): every step result renders here, full width, remaining height -->
             <div id="Alignement_makeResultsPanel">
                 <!-- Step "Validate exact matches" (flat 2 columns): revealed after "list similars" -->
                 <div class="Alignement_resultSection" style="display:none;margin-top:10px;">
@@ -136,8 +132,5 @@
                 </div>
             </div>
         </div>
-        <!--   <div id="Alignement_tableTab">
-               <div id="Alignement_tableDiv" class="browseRightPanel"></div>
-           </div>-->
     </div>
 </div>
