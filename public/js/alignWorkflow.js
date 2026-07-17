@@ -14,6 +14,8 @@ var AlignementWorkflow = (function () {
     // Left-panel (framed zone) container for the AI-step action buttons (save/export), kept out of the
     // result panel so the result list can use the full height.
     var AI_STEP_BUTTONS_DIV_ID = "Alignement_aiStepBtnDiv";
+    // Results panel (framed zone): hidden at startup, revealed when the first result renders.
+    var RESULTS_PANEL_DIV_ID = "Alignement_makeResultsPanel";
     // Registered source receiving ALL generated alignment triples (equivalentClass / subClassOf).
     // Its graphUri (http://data.totalenergies.com/resource/tsf/ontology/alignment/eclass/) is defined
     // in sources.json — change this constant to target another alignment source.
@@ -163,6 +165,8 @@ var AlignementWorkflow = (function () {
         self._createdSubClassKeys = {};
         // Hide the AI-step action buttons from any previous run (they belong to later steps).
         $("#" + AI_STEP_BUTTONS_DIV_ID).hide();
+        // First results are coming: reveal the results panel (hidden until "list similars" runs).
+        $("#" + RESULTS_PANEL_DIV_ID).show();
         // Reveal this step's section (hidden by default so steps appear in sequence).
         $("#" + divId).parent().show();
 
