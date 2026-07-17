@@ -3,19 +3,29 @@
         width: 800px;
         height: 600px;
     }
-    /* make tab: full-width column — container trees on top, bot controls, then the results panel */
+    /* make tab: two columns — left = container trees + bot controls, right = results panel.
+       The results panel starts hidden, so the trees stretch over the FULL width until
+       "list similars" produces results; then the panel shows on the right and the trees
+       shrink back to the left half (like before). */
     #Alignement_makeSimilarsTab {
         overflow: hidden;
         height: 760px;
     }
-    /* the two container trees share the whole tab width (half each) */
+    #Alignement_makeLeftPanel {
+        flex: 1 1 50%;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: auto;
+    }
+    /* the two container trees share the left panel width (half each) */
     #Alignement_makeSimilarsTab #Alignement_sourceContainersDiv,
     #Alignement_makeSimilarsTab #Alignement_targetContainersDiv {
         width: 100%;
         height: 280px;
         overflow: auto;
     }
-    /* bot bubbles + step action buttons: bounded height so the results panel keeps its room */
+    /* bot bubbles + step action buttons: bounded height so the panel keeps its room */
     #Alignement_makeControlsRow {
         display: flex;
         flex-direction: row;
@@ -25,14 +35,14 @@
         max-height: 170px;
         overflow: auto;
     }
-    /* framed zone: every step result renders here, full width and remaining height */
+    /* framed results zone (right column): hidden until the first results arrive */
     #Alignement_makeResultsPanel {
-        flex: 1 1 auto;
+        flex: 1 1 50%;
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        margin-top: 10px;
-        min-height: 0;
+        margin-left: 15px;
+        min-width: 0;
         border: 1px solid #bbb;
         border-radius: 4px;
         padding: 8px;
@@ -58,42 +68,43 @@
             <li class="nodeInfosWidget_tabDiv"><a href="#Alignement_makeSimilarsTab">make</a></li>
         </ul>
 
-        <div id="Alignement_makeSimilarsTab" style="display:flex;flex-direction: column">
-            <!-- Top action buttons -->
-            <div style="flex:0 0 auto;">
-                <button onclick="Alignement.openSource()">choose source</button>
+        <div id="Alignement_makeSimilarsTab" style="display:flex;flex-direction: row">
+            <!-- LEFT: action buttons + container trees (full width while no results) + bot controls -->
+            <div id="Alignement_makeLeftPanel">
+                <div style="flex:0 0 auto;">
+                    <button onclick="Alignement.openSource()">choose source</button>
 
-                <button onclick="Alignement.listSimilars()">list similars</button>
-            </div>
-
-            <!-- Container trees over the full width: source (left half) | UNSPSC (right half) -->
-            <div style="display:flex;flex-direction:row;flex:0 0 auto;margin-top:6px;">
-                <div style="flex:1 1 50%;min-width:0;">
-                    <div id="Alignement_sourceContainersDiv" class="browseRightPanel"></div>
+                    <button onclick="Alignement.listSimilars()">list similars</button>
                 </div>
 
-                <div style="flex:1 1 50%;min-width:0;margin-left:10px;">
-                    <div>UNSPSC</div>
-                    <div id="Alignement_targetContainersDiv" class="browseRightPanel"></div>
+                <!-- Container trees: source (left half) | UNSPSC (right half) -->
+                <div style="display:flex;flex-direction:row;flex:0 0 auto;margin-top:6px;">
+                    <div style="flex:1 1 50%;min-width:0;">
+                        <div id="Alignement_sourceContainersDiv" class="browseRightPanel"></div>
+                    </div>
+
+                    <div style="flex:1 1 50%;min-width:0;margin-left:10px;">
+                        <div>UNSPSC</div>
+                        <div id="Alignement_targetContainersDiv" class="browseRightPanel"></div>
+                    </div>
+                </div>
+
+                <!-- Bot bubbles + step action buttons -->
+                <div id="Alignement_makeControlsRow">
+                    <!-- Alignment bot panel (step bubbles: "view non exact match", etc.) -->
+                    <div id="Alignement_botDiv" style="margin-top:10px;"></div>
+
+                    <!-- Standalone action (validation step only): generate equivalentClass for the currently
+                         checked exact matches. Idempotent, does NOT advance the bot to the non-exact step. -->
+                    <div id="Alignement_generateEquivBtnDiv" style="display:none;margin-top:10px;"></div>
+
+                    <!-- Action buttons for the AI validation steps (equivalent class AI / subclass / remaining):
+                         save + export, kept out of the result panel so the result list can use the full height. -->
+                    <div id="Alignement_aiStepBtnDiv" style="display:none;margin-top:10px;"></div>
                 </div>
             </div>
 
-            <!-- Bot bubbles + step action buttons -->
-            <div id="Alignement_makeControlsRow">
-                <!-- Alignment bot panel (step bubbles: "view non exact match", etc.) -->
-                <div id="Alignement_botDiv" style="margin-top:10px;"></div>
-
-                <!-- Standalone action (validation step only): generate equivalentClass for the currently
-                     checked exact matches. Idempotent, does NOT advance the bot to the non-exact step. -->
-                <div id="Alignement_generateEquivBtnDiv" style="display:none;margin-top:10px;"></div>
-
-                <!-- Action buttons for the AI validation steps (equivalent class AI / subclass / remaining):
-                     save + export, kept out of the result panel so the result list can use the full height. -->
-                <div id="Alignement_aiStepBtnDiv" style="display:none;margin-top:10px;"></div>
-            </div>
-
-            <!-- Results panel (framed): hidden until "list similars" produces results, then every step
-                 result renders here, full width, remaining height -->
+            <!-- RIGHT: results panel (framed), hidden until "list similars" produces results -->
             <div id="Alignement_makeResultsPanel" style="display:none">
                 <!-- Step "Validate exact matches" (flat 2 columns): revealed after "list similars" -->
                 <div class="Alignement_resultSection" style="display:none;margin-top:10px;">
