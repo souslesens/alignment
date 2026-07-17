@@ -10,15 +10,46 @@ var AlignmentMakeSimilars = (function () {
 
     }
 
+    /**
+     * Renders the target-source picker: a checkbox list of the alignable target sources
+     * (UNSPSC, ECLASS). Only one can be checked at a time; the checked one becomes the
+     * target and is compared against ALL of its content (no per-container selection).
+     * @function
+     * @name initTargetContainers
+     * @memberof module:AlignmentMakeSimilars
+     * @returns {void}
+     */
     self.initTargetContainers = function () {
-        self.currentTargetSource = "UNSPSC"
-        var options = {
-            jstreeOptions: {selectTreeNodeFn: AlignmentMakeSimilar.selectTargetTreeNodeFn},
-            contextMenu: function () {
-                return {}
-            }
+        self.targetSources = ["UNSPSC", "ECLASS"];
+        self.currentTargetSource = null;
+        var checkboxLines = self.targetSources.map(function (targetSource) {
+            return "<div><label><input type='checkbox' class='Alignment_targetSourceCbx' value='" + targetSource + "'> " + targetSource + "</label></div>";
+        });
+        var checkboxesHtml = checkboxLines.join("");
+        $("#Alignment_targetContainersDiv").html(checkboxesHtml);
+        $(".Alignment_targetSourceCbx")
+            .off("change")
+            .on("change", function () {
+                self.selectTargetSource(this);
+            });
+    }
+
+    /**
+     * Handles a target-source checkbox: enforces single selection (unchecks the others) and
+     * stores the checked source as the current target (or null when none is checked).
+     * @function
+     * @name selectTargetSource
+     * @memberof module:AlignmentMakeSimilars
+     * @param {HTMLInputElement} checkbox - The checkbox that was toggled.
+     * @returns {void}
+     */
+    self.selectTargetSource = function (checkbox) {
+        $(".Alignment_targetSourceCbx").not(checkbox).prop("checked", false);
+        if (checkbox.checked) {
+            self.currentTargetSource = checkbox.value;
+        } else {
+            self.currentTargetSource = null;
         }
-        Containers_tree.search("Alignment_targetContainersDiv", self.currentTargetSource, options);
     }
 
     self.selectTreeNodeFn = function (err, obj) {
@@ -42,15 +73,6 @@ var AlignmentMakeSimilars = (function () {
         })
 
 
-    }
-
-
-    self.selectTargetTreeNodeFn = function (event, obj) {
-        self.currentTargetContainerId = obj.node.data.id;
-
-        if (obj.event.button != 2) {
-            Containers_tree.listContainerResources(obj.node, "Alignment_targetContainersDiv");
-        }
     }
 
 
@@ -88,11 +110,13 @@ var AlignmentMakeSimilars = (function () {
         var fromSource = self.currentSource;
         var toSource = self.currentTargetSource;
         var fromcontainer = self.currentSourceContainerId;
-        var toContainer = self.currentTargetContainerId;
 
 
-        if (!fromcontainer || !toContainer) {
-            return alert("missing from or to container")
+        if (!fromcontainer) {
+            return alert("no source container selected")
+        }
+        if (!toSource) {
+            return alert("no target source selected (check UNSPSC or ECLASS)")
         }
 
 
