@@ -441,6 +441,28 @@ var Alignment = (function () {
         AlignmentMakeSimilars.test()
     }
 
+    /**
+     * Ensures the jstree default theme stylesheet is available even when the main app loads it from a
+     * blocked external CDN (offline / CDN-restricted deployments): injects a local copy served by this
+     * plugin. Idempotent. This is what makes the jstree checkboxes (validation / AI steps) render.
+     * @function
+     * @name ensureJstreeTheme
+     * @memberof module:Alignment
+     * @returns {void}
+     */
+    self.ensureJstreeTheme = function () {
+        var linkId = "Alignment_jstreeThemeCss";
+        if (document.getElementById(linkId)) {
+            return;
+        }
+        var link = document.createElement("link");
+        link.id = linkId;
+        link.rel = "stylesheet";
+        link.href = "/plugins/alignment/vendor/jstree/themes/default/style.min.css";
+        document.head.appendChild(link);
+    };
+    self.ensureJstreeTheme();
+
     return self;
 })();
 export default Alignment;
