@@ -1,10 +1,10 @@
-// Alignement alignment bot: orchestrates the steps downstream of AlignementMakeSimilars.bulkSimilars.
+// Alignment bot: orchestrates the steps downstream of AlignmentMakeSimilars.bulkSimilars.
 // split (case + plural) -> validate exacts (checkbox jsTree grouped by source) -> equivalentClass -> non-exacts.
 // BotEngineClass is a core SLS module, imported by absolute path (the plugin is served under /plugins/).
 import BotEngineClass from "/vocables/modules/bots/_botEngineClass.js";
-import AlignementWorkflow from "./alignWorkflow.js";
+import AlignmentWorkflow from "./alignWorkflow.js";
 
-var Alignement_bot = (function () {
+var Alignment_bot = (function () {
     var self = {};
     self.myBotEngine = new BotEngineClass();
 
@@ -52,7 +52,7 @@ var Alignement_bot = (function () {
      * @returns {void}
      */
     self.start = function (workflow, _params, callbackFn) {
-        self.title = "Alignement alignment";
+        self.title = "Alignment";
         if (_params && _params.title) {
             self.title = _params.title;
         }
@@ -66,13 +66,13 @@ var Alignement_bot = (function () {
             fromWordsMap: {},
             source: null,
             targetSource: null,
-            validationDivId: "Alignement_validationDiv",
-            generateEquivBtnDivId: "Alignement_generateEquivBtnDiv",
-            nonExactDivId: "Alignement_nonExactDiv",
-            aiDivId: "Alignement_aiDiv",
-            aiEquivDivId: "Alignement_aiEquivDiv",
-            aiSubclassDivId: "Alignement_aiSubclassDiv",
-            aiRemainingDivId: "Alignement_aiRemainingDiv",
+            validationDivId: "Alignment_validationDiv",
+            generateEquivBtnDivId: "Alignment_generateEquivBtnDiv",
+            nonExactDivId: "Alignment_nonExactDiv",
+            aiDivId: "Alignment_aiDiv",
+            aiEquivDivId: "Alignment_aiEquivDiv",
+            aiSubclassDivId: "Alignment_aiSubclassDiv",
+            aiRemainingDivId: "Alignment_aiRemainingDiv",
             exact: [],
             nonExact: [],
             aiBuckets: null,
@@ -84,7 +84,7 @@ var Alignement_bot = (function () {
             initOptions = { divId: _params.botDivId };
         }
 
-        self.myBotEngine.init(Alignement_bot, workflow, initOptions, function () {
+        self.myBotEngine.init(Alignment_bot, workflow, initOptions, function () {
             self.myBotEngine.startParams = startParams;
             if (_params) {
                 for (var key in _params) {
@@ -155,7 +155,7 @@ var Alignement_bot = (function () {
             self.myBotEngine.nextStep();
         },
         endFn: function () {
-            // Alignement runs the bot in a plain div (not a jQuery UI dialog), so the engine's closeDialog()
+            // Alignment runs the bot in a plain div (not a jQuery UI dialog), so the engine's closeDialog()
             // throws "cannot call methods on dialog prior to initialization" — harmless, so swallow it.
             try {
                 self.myBotEngine.end();
@@ -164,7 +164,7 @@ var Alignement_bot = (function () {
             }
         },
         splitFn: function () {
-            var result = AlignementWorkflow.splitExactMatches(self.params.bulkSimilars, self.params.fromWordsMap);
+            var result = AlignmentWorkflow.splitExactMatches(self.params.bulkSimilars, self.params.fromWordsMap);
             self.params.exact = result.exact;
             self.params.nonExact = result.nonExact;
             self.myBotEngine.nextStep();
@@ -173,33 +173,33 @@ var Alignement_bot = (function () {
             // Show only this step's section.
             hideOtherStepSections(self.params.validationDivId);
             var headerInfo = {
-                headerDivId: "Alignement_validationHeader",
+                headerDivId: "Alignment_validationHeader",
                 sourceName: self.params.source,
                 targetName: self.params.targetSource,
             };
-            AlignementWorkflow.renderValidation(self.params.validationDivId, self.params.exact, headerInfo, function () {
+            AlignmentWorkflow.renderValidation(self.params.validationDivId, self.params.exact, headerInfo, function () {
                 self.myBotEngine.nextStep();
             });
             // Standalone button: generate equivalentClass for the checked exact matches (idempotent),
             // decoupled from advancing the bot. Belongs to the validation step only.
-            AlignementWorkflow.renderGenerateEquivButton(self.params.generateEquivBtnDivId);
+            AlignmentWorkflow.renderGenerateEquivButton(self.params.generateEquivBtnDivId);
         },
         viewNonExactFn: function () {
             // Only navigation: demote the unchecked exact pairs to non-exacts and move to the non-exact step.
             // equivalentClass creation is now done by the standalone "generate equivalent class" button.
-            var split = AlignementWorkflow.getValidatedSplit(self.params.validationDivId);
+            var split = AlignmentWorkflow.getValidatedSplit(self.params.validationDivId);
             self.params.nonExact = self.params.nonExact.concat(split.unchecked);
             $("#" + self.params.generateEquivBtnDivId).hide();
             self.myBotEngine.nextStep();
         },
         showNonExactFn: function () {
             hideOtherStepSections(self.params.nonExactDivId);
-            AlignementWorkflow.renderNonExact(self.params.nonExactDivId, self.params.nonExact);
+            AlignmentWorkflow.renderNonExact(self.params.nonExactDivId, self.params.nonExact);
             self.myBotEngine.nextStep();
         },
         buildDefinitionsFn: function () {
-            // Builds AlignementWorkflow.definitions (source + target class definitions) for the LLM step. No UI.
-            AlignementWorkflow.buildDefinitions(self.params.source, self.params.targetSource, self.params.nonExact, function (err) {
+            // Builds AlignmentWorkflow.definitions (source + target class definitions) for the LLM step. No UI.
+            AlignmentWorkflow.buildDefinitions(self.params.source, self.params.targetSource, self.params.nonExact, function (err) {
                 if (err) {
                     var message = err.message;
                     if (!message) {
@@ -216,7 +216,7 @@ var Alignement_bot = (function () {
             alert("AI treatment may take a few minutes — please wait for it to finish.");
             // Classifies the non-exacts via the AI route (non-exacts + definitions table), using the
             // model configured in mainConfig.llm.
-            AlignementWorkflow.runAiTreatment(self.params.source, self.params.targetSource, self.params.nonExact, AlignementWorkflow.definitions, self.params.aiDivId, function (err) {
+            AlignmentWorkflow.runAiTreatment(self.params.source, self.params.targetSource, self.params.nonExact, AlignmentWorkflow.definitions, self.params.aiDivId, function (err) {
                 if (err) {
                     var message = err.message;
                     if (!message) {
@@ -231,8 +231,8 @@ var Alignement_bot = (function () {
         equivalentClassAiFn: function () {
             hideOtherStepSections(self.params.aiEquivDivId);
             // Recover URIs for the LLM classifications, split by category, and start the post-AI flow.
-            var enriched = AlignementWorkflow.enrichWithUris(AlignementWorkflow.aiTreatment.classifications, self.params.nonExact);
-            self.params.aiBuckets = AlignementWorkflow.splitByAiCategory(enriched);
+            var enriched = AlignmentWorkflow.enrichWithUris(AlignmentWorkflow.aiTreatment.classifications, self.params.nonExact);
+            self.params.aiBuckets = AlignmentWorkflow.splitByAiCategory(enriched);
             self.params.aiRemaining = [];
             if (self.params.aiBuckets.exactAi.length === 0) {
                 alert("No Exact match AI — moving to the next step.");
@@ -244,8 +244,8 @@ var Alignement_bot = (function () {
             // "generate AI equivalent class" creates the triples (does NOT advance); "Exporter" exports;
             // "generate subclass of and inverse subclass of" advances to the subclass step (no save required).
             var onSave = function (treeDivId) {
-                var split = AlignementWorkflow.getAiCheckSplit(treeDivId);
-                AlignementWorkflow.generateEquivalentClassesIdempotent(split.checked, function (err, result) {
+                var split = AlignmentWorkflow.getAiCheckSplit(treeDivId);
+                AlignmentWorkflow.generateEquivalentClassesIdempotent(split.checked, function (err, result) {
                     if (err) {
                         window.UI.message("Error inserting equivalentClass: " + (err.message || err), true);
                         return;
@@ -254,14 +254,14 @@ var Alignement_bot = (function () {
                     if (result.skipped > 0) {
                         message += " (" + result.skipped + " already created, skipped)";
                     }
-                    window.UI.message(message + " in " + AlignementWorkflow.ALIGNMENT_SOURCE, true);
+                    window.UI.message(message + " in " + AlignmentWorkflow.ALIGNMENT_SOURCE, true);
                 });
             };
             var onExport = function (treeDivId) {
-                var split = AlignementWorkflow.getAiCheckSplit(treeDivId);
-                AlignementWorkflow.exportPairsToCsv(split.checked, columns, "equivalent_class_AI.csv");
+                var split = AlignmentWorkflow.getAiCheckSplit(treeDivId);
+                AlignmentWorkflow.exportPairsToCsv(split.checked, columns, "equivalent_class_AI.csv");
             };
-            AlignementWorkflow.renderAiValidationStep(
+            AlignmentWorkflow.renderAiValidationStep(
                 self.params.aiEquivDivId,
                 self.params.aiBuckets.exactAi,
                 {
@@ -279,7 +279,7 @@ var Alignement_bot = (function () {
             hideOtherStepSections(self.params.aiSubclassDivId);
             // Carry the unchecked Exact match AI (from the equivalent step) to the remaining bucket.
             if (self.params.aiBuckets.exactAi.length > 0) {
-                var equivSplit = AlignementWorkflow.getAiCheckSplit(self.params.aiEquivDivId + "_tree");
+                var equivSplit = AlignmentWorkflow.getAiCheckSplit(self.params.aiEquivDivId + "_tree");
                 self.params.aiRemaining = self.params.aiRemaining.concat(equivSplit.unchecked);
             }
             var subPairs = self.params.aiBuckets.subclassOf.concat(self.params.aiBuckets.subclassOfInverse);
@@ -291,8 +291,8 @@ var Alignement_bot = (function () {
             var columns = aiCsvColumns(self.params.source, self.params.targetSource);
 
             var onSave = function (treeDivId) {
-                var split = AlignementWorkflow.getAiCheckSplit(treeDivId);
-                AlignementWorkflow.generateSubClassesIdempotent(split.checked, function (err, result) {
+                var split = AlignmentWorkflow.getAiCheckSplit(treeDivId);
+                AlignmentWorkflow.generateSubClassesIdempotent(split.checked, function (err, result) {
                     if (err) {
                         window.UI.message("Error inserting subClassOf: " + (err.message || err), true);
                         return;
@@ -301,14 +301,14 @@ var Alignement_bot = (function () {
                     if (result.skipped > 0) {
                         message += " (" + result.skipped + " already created, skipped)";
                     }
-                    window.UI.message(message + " in " + AlignementWorkflow.ALIGNMENT_SOURCE, true);
+                    window.UI.message(message + " in " + AlignmentWorkflow.ALIGNMENT_SOURCE, true);
                 });
             };
             var onExport = function (treeDivId) {
-                var split = AlignementWorkflow.getAiCheckSplit(treeDivId);
-                AlignementWorkflow.exportPairsToCsv(split.checked, columns, "subclass_AI.csv");
+                var split = AlignmentWorkflow.getAiCheckSplit(treeDivId);
+                AlignmentWorkflow.exportPairsToCsv(split.checked, columns, "subclass_AI.csv");
             };
-            AlignementWorkflow.renderAiValidationStep(
+            AlignmentWorkflow.renderAiValidationStep(
                 self.params.aiSubclassDivId,
                 subPairs,
                 {
@@ -327,7 +327,7 @@ var Alignement_bot = (function () {
             var buckets = self.params.aiBuckets;
             // Carry the unchecked SubclassOf / inverse (from the subclass step) to the remaining bucket.
             if (buckets.subclassOf.length + buckets.subclassOfInverse.length > 0) {
-                var subSplit = AlignementWorkflow.getAiCheckSplit(self.params.aiSubclassDivId + "_tree");
+                var subSplit = AlignmentWorkflow.getAiCheckSplit(self.params.aiSubclassDivId + "_tree");
                 self.params.aiRemaining = self.params.aiRemaining.concat(subSplit.unchecked);
             }
             var remaining = self.params.aiRemaining.concat(buckets.notMatch, buckets.unknown, buckets.other);
@@ -338,15 +338,15 @@ var Alignement_bot = (function () {
             }
             var columns = aiCsvColumns(self.params.source, self.params.targetSource);
             var onExport = function () {
-                AlignementWorkflow.exportPairsToCsv(remaining, columns, "remaining_AI.csv");
+                AlignmentWorkflow.exportPairsToCsv(remaining, columns, "remaining_AI.csv");
                 self.myBotEngine.nextStep();
             };
-            AlignementWorkflow.renderRemaining(self.params.aiRemainingDivId, remaining, self.params.source, self.params.targetSource, onExport);
+            AlignmentWorkflow.renderRemaining(self.params.aiRemainingDivId, remaining, self.params.source, self.params.targetSource, onExport);
         },
     };
 
     return self;
 })();
 
-export default Alignement_bot;
-window.Alignement_bot = Alignement_bot;
+export default Alignment_bot;
+window.Alignment_bot = Alignment_bot;

@@ -1,7 +1,7 @@
-import AlignementMakeSimilars from "./makeSimilars.js";
+import AlignmentMakeSimilars from "./makeSimilars.js";
 
 
-var Alignement = (function () {
+var Alignment = (function () {
     var self = {};
     self.onLoaded = function () {
         //  UI.initMenuBar(self.loadSource);
@@ -10,16 +10,16 @@ var Alignement = (function () {
 
     self.initUI = function () {
         UI.showHideRightPanel();
-        $("#lateralPanelDiv").load("modules/tools/alignement/html/alignementLeftPanel.html", function () {
-            $("#graphDiv").load("modules/tools/alignement/html/alignementCentralPanel.html", function () {
+        $("#lateralPanelDiv").load("modules/tools/alignment/html/alignmentLeftPanel.html", function () {
+            $("#graphDiv").load("modules/tools/alignment/html/alignmentCentralPanel.html", function () {
                 self.init(MainController.currentSource);
                 $("#rightControlPanelDiv").hide();
                 UI.resetWindowSize();
                 var graphDivWidth = $("#graphDiv").css("width");
-                $("#Alignement_centralPanelDiv").css("width", graphDivWidth);
-                $("#Alignement_rightPanelTabs").css("width", graphDivWidth);
-                $("#Alignement_rightPanelTabs").css("width", graphDivWidth);
-                $("#Alignement_graphDiv").css("width", graphDivWidth);
+                $("#Alignment_centralPanelDiv").css("width", graphDivWidth);
+                $("#Alignment_rightPanelTabs").css("width", graphDivWidth);
+                $("#Alignment_rightPanelTabs").css("width", graphDivWidth);
+                $("#Alignment_graphDiv").css("width", graphDivWidth);
             });
         });
     };
@@ -27,7 +27,7 @@ var Alignement = (function () {
      * Loads a source and initializes modules for browsing.
      * @function
      * @name loadSource
-     * @memberof module:Alignement
+     * @memberof module:Alignment
      * @returns {void}
      */
     self.onLoaded = function () {
@@ -39,16 +39,16 @@ var Alignement = (function () {
             if (err) {
                 return MainController.errorAlert(err.responseText);
             }**/
-            $("#lateralPanelDiv").load("/plugins/alignement/html/leftPanel.html", function () {
-                $("#graphDiv").load("/plugins/alignement/html/centralPanel.html", function () {
+            $("#lateralPanelDiv").load("/plugins/alignment/html/leftPanel.html", function () {
+                $("#graphDiv").load("/plugins/alignment/html/centralPanel.html", function () {
                     self.init(self.currentSource);
                     $("#rightControlPanelDiv").hide();
                     UI.resetWindowSize();
                     var graphDivWidth = $("#graphDiv").css("width");
-                    $("#Alignement_centralPanelDiv").css("width", graphDivWidth);
-                    $("#Alignement_rightPanelTabs").css("width", graphDivWidth);
-                    $("#Alignement_rightPanelTabs").css("width", graphDivWidth);
-                    $("#Alignement_graphDiv").css("width", graphDivWidth);
+                    $("#Alignment_centralPanelDiv").css("width", graphDivWidth);
+                    $("#Alignment_rightPanelTabs").css("width", graphDivWidth);
+                    $("#Alignment_rightPanelTabs").css("width", graphDivWidth);
+                    $("#Alignment_graphDiv").css("width", graphDivWidth);
                 });
             });
         //});
@@ -58,8 +58,8 @@ var Alignement = (function () {
             if (err) {
                 return MainController.errorAlert(err)
             }*/
-        $("#mainDialogDiv").load("modules/tools/alignement/html/alignementDialog.html", function () {
-            UI.openDialog("mainDialogDiv", { title: "Alignement" });
+        $("#mainDialogDiv").load("modules/tools/alignment/html/alignmentDialog.html", function () {
+            UI.openDialog("mainDialogDiv", { title: "Alignment" });
             UI.clampAndCenterDialog("mainDialogDiv");
             self.init(mainSource);
         });
@@ -67,7 +67,7 @@ var Alignement = (function () {
     };
 
     self.init = function (mainSource) {
-        $("#Alignement_rightPanelTabs").tabs({
+        $("#Alignment_rightPanelTabs").tabs({
             activate: function (event, ui) {
                 $(".nodeInfosWidget_tabDiv").removeClass("nodesInfos-selectedTab");
 
@@ -78,10 +78,10 @@ var Alignement = (function () {
         });
         self.currentSearchResult = null;
         var currentHit = null;
-        $("#Alignement_searchAllSourcesTermInput").keypress(function (e) {
+        $("#Alignment_searchAllSourcesTermInput").keypress(function (e) {
             if (e.which == 13) {
-                var term = $("#Alignement_searchAllSourcesTermInput").val();
-                var exactMatch = $("#Alignement_exactMatchCBX").prop("checked");
+                var term = $("#Alignment_searchAllSourcesTermInput").val();
+                var exactMatch = $("#Alignment_exactMatchCBX").prop("checked");
                 var mode = "fuzzyMatch";
                 if (exactMatch) {
                     mode = "exactMatch";
@@ -126,9 +126,9 @@ var Alignement = (function () {
                         // for (var index in self.currentSearchResult) {
                         if (index != "parentIdsLabelsMap") {
                             html +=
-                                '<li  class= "Alignement_searchList" id=\'' +
+                                '<li  class= "Alignment_searchList" id=\'' +
                                 index +
-                                "' onclick='Alignement.listIndexHits(\"" +
+                                "' onclick='Alignment.listIndexHits(\"" +
                                 index +
                                 "\")'>" +
                                 index +
@@ -138,11 +138,11 @@ var Alignement = (function () {
                         }
                     });
                     html += "</ul>";
-                    $("#Alignement_searchListDiv").html(html);
-                    $("#Alignement_indexHitsDiv").html("");
-                    $("#Alignement_hitDetailsDiv").html("");
+                    $("#Alignment_searchListDiv").html(html);
+                    $("#Alignment_indexHitsDiv").html("");
+                    $("#Alignment_hitDetailsDiv").html("");
 
-                    Alignement.listIndexHits(self.currentSource)
+                    Alignment.listIndexHits(self.currentSource)
                 });
             }
         });
@@ -156,7 +156,7 @@ var Alignement = (function () {
     self.listIndexHits = function (index) {
         var html = "<ul>";
         var distinctIds = {};
-        $(".Alignement_searchList").removeClass("selectedItem");
+        $(".Alignment_searchList").removeClass("selectedItem");
         $("#" + index).addClass("selectedItem");
 
         self.currentSearchResult[index].sort(function (a, b) {
@@ -173,12 +173,12 @@ var Alignement = (function () {
             if (!distinctIds[hit.id]) {
                 distinctIds[hit.id] = 1;
 
-                html += '<li   class="Alignement_indexList" id=\'' + self.encodeUriForHtmlId(hit.id) + "' onclick='Alignement.showHitDetails(\"" + index + "|" + hit.id + "\")'>" + hit.label + "</li>";
+                html += '<li   class="Alignment_indexList" id=\'' + self.encodeUriForHtmlId(hit.id) + "' onclick='Alignment.showHitDetails(\"" + index + "|" + hit.id + "\")'>" + hit.label + "</li>";
             }
         });
         html += "</ul>";
-        $("#Alignement_indexHitsDiv").html(html);
-        $("#Alignement_hitDetailsDiv").html("");
+        $("#Alignment_indexHitsDiv").html(html);
+        $("#Alignment_hitDetailsDiv").html("");
     };
     self.showHitDetails = function (hitKey) {
         var array = hitKey.split("|");
@@ -196,7 +196,7 @@ var Alignement = (function () {
         }
 
         var node = { data: { id: hit.id } };
-        NodeInfosWidget.showNodeInfos(hit.source, node, "Alignement_hitDetailsDiv", {
+        NodeInfosWidget.showNodeInfos(hit.source, node, "Alignment_hitDetailsDiv", {
             hideModifyButtons: true,
             noDialog: true,
         });
@@ -270,7 +270,7 @@ var Alignement = (function () {
                         options2.onclickFn = self.graphActions.onVisjsGraphClick;
                         options2.onRightClickFn = self.graphActions.showGraphPopupMenu;
 
-                        self.visjsGraph = new VisjsGraphClass(options.graphDiv || "Alignement_graphDiv", visjsData, options2);
+                        self.visjsGraph = new VisjsGraphClass(options.graphDiv || "Alignment_graphDiv", visjsData, options2);
                         self.visjsGraph.draw(function () {
                             Lineage_decoration.decorateByUpperOntologyByClass(visjsData.nodes, self.visjsGraph);
                         });
@@ -411,10 +411,10 @@ var Alignement = (function () {
                 if (node.data.id && node.data.source) {
                     //var hitKey = node.data.source + "|" + node.data.id;
                     //self.showHitDetailsOutsideSearch(hitKey);
-                    Alignement.showHitGraph({ source: node.data.source, id: node.data.id });
+                    Alignment.showHitGraph({ source: node.data.source, id: node.data.id });
                 }
             } else {
-                Alignement.showHitGraph({ source: node.data.source, id: node.data.id }, { addToLevel: node.level });
+                Alignment.showHitGraph({ source: node.data.source, id: node.data.id }, { addToLevel: node.level });
                 // NodeInfosWidget.showNodeInfos(node.data.source, node, "smallDialogDiv", {});
             }
         },
@@ -430,18 +430,18 @@ var Alignement = (function () {
     };
 
     self.openSource=function(){
-        AlignementMakeSimilars.openSource()
+        AlignmentMakeSimilars.openSource()
     }
 
     self.listSimilars=function(){
-        AlignementMakeSimilars.listSimilars()
+        AlignmentMakeSimilars.listSimilars()
     }
 
      self.test=function(){
-        AlignementMakeSimilars.test()
+        AlignmentMakeSimilars.test()
     }
 
     return self;
 })();
-export default Alignement;
-window.Alignement = Alignement;
+export default Alignment;
+window.Alignment = Alignment;

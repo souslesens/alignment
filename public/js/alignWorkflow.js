@@ -1,4 +1,4 @@
-// Alignement alignment workflow, downstream of AlignementMakeSimilars.bulkSimilars.
+// Alignment alignment workflow, downstream of AlignmentMakeSimilars.bulkSimilars.
 // Results are GROUPED BY SOURCE (like the `str` view): a source never repeats across rows.
 // 1) split candidate pairs into exact (case + English plural) vs non-exact
 // 2) render exact pairs in a checkbox jsTree grouped by source (parent = source, children = targets)
@@ -6,16 +6,16 @@
 // 4) display the remaining non-exact pairs grouped by source (input for the LLM step)
 import { matchesCaseAndPlural } from "./matchUtils.js";
 
-var AlignementWorkflow = (function () {
+var AlignmentWorkflow = (function () {
     var self = {};
 
     var OWL_EQUIVALENT_CLASS = "http://www.w3.org/2002/07/owl#equivalentClass";
     var NODE_ID_SEPARATOR = " ||| ";
     // Left-panel (framed zone) container for the AI-step action buttons (save/export), kept out of the
     // result panel so the result list can use the full height.
-    var AI_STEP_BUTTONS_DIV_ID = "Alignement_aiStepBtnDiv";
+    var AI_STEP_BUTTONS_DIV_ID = "Alignment_aiStepBtnDiv";
     // Results panel (framed zone): hidden at startup, revealed when the first result renders.
-    var RESULTS_PANEL_DIV_ID = "Alignement_makeResultsPanel";
+    var RESULTS_PANEL_DIV_ID = "Alignment_makeResultsPanel";
     // Registered source receiving ALL generated alignment triples (equivalentClass / subClassOf).
     // Its graphUri (http://data.totalenergies.com/resource/tsf/ontology/alignment/eclass/) is defined
     // in sources.json — change this constant to target another alignment source.
@@ -113,7 +113,7 @@ var AlignementWorkflow = (function () {
     }
 
     /**
-     * Splits AlignementMakeSimilars candidate pairs into exact vs non-exact matches.
+     * Splits AlignmentMakeSimilars candidate pairs into exact vs non-exact matches.
      * @param {Object} bulkSimilars - { srcLabel: { tgtUri: { label, score } } }
      * @param {Object} fromWordsMap - { srcLabel: srcUri }
      * @returns {{exact: Array, nonExact: Array}} Pairs { srcUri, srcLabel, tgtUri, tgtLabel, score }.
@@ -576,7 +576,7 @@ var AlignementWorkflow = (function () {
         }
         // "Brtip" dom = Buttons (Export CSV/copy) + table + info + paging, WITHOUT the global search box.
         window.Export.showDataTable(divId + "_table", cols, dataSet, "Brtip", {
-            dataTableDivId: "Alignement_aiTable",
+            dataTableDivId: "Alignment_aiTable",
             paging: true,
             height: "auto",
             width: "100%",
@@ -1009,7 +1009,7 @@ var AlignementWorkflow = (function () {
     return self;
 })();
 
-export default AlignementWorkflow;
+export default AlignmentWorkflow;
 if (typeof window !== "undefined") {
-    window.AlignementWorkflow = AlignementWorkflow;
+    window.AlignmentWorkflow = AlignmentWorkflow;
 }

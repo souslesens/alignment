@@ -1,1 +1,1 @@
-# alignement
+# alignment
