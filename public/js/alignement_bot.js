@@ -182,7 +182,7 @@ var Alignement_bot = (function () {
             });
             // Standalone button: generate equivalentClass for the checked exact matches (idempotent),
             // decoupled from advancing the bot. Belongs to the validation step only.
-            AlignementWorkflow.renderGenerateEquivButton(self.params.generateEquivBtnDivId, self.params.source, self.params.targetSource);
+            AlignementWorkflow.renderGenerateEquivButton(self.params.generateEquivBtnDivId);
         },
         viewNonExactFn: function () {
             // Only navigation: demote the unchecked exact pairs to non-exacts and move to the non-exact step.
@@ -245,7 +245,7 @@ var Alignement_bot = (function () {
             // "generate subclass of and inverse subclass of" advances to the subclass step (no save required).
             var onSave = function (treeDivId) {
                 var split = AlignementWorkflow.getAiCheckSplit(treeDivId);
-                AlignementWorkflow.generateEquivalentClassesIdempotent(self.params.source, self.params.targetSource, split.checked, function (err, result) {
+                AlignementWorkflow.generateEquivalentClassesIdempotent(split.checked, function (err, result) {
                     if (err) {
                         window.UI.message("Error inserting equivalentClass: " + (err.message || err), true);
                         return;
@@ -254,7 +254,7 @@ var Alignement_bot = (function () {
                     if (result.skipped > 0) {
                         message += " (" + result.skipped + " already created, skipped)";
                     }
-                    window.UI.message(message + " in graph " + self.params.source + "/" + self.params.targetSource, true);
+                    window.UI.message(message + " in " + AlignementWorkflow.ALIGNMENT_SOURCE, true);
                 });
             };
             var onExport = function (treeDivId) {
@@ -292,7 +292,7 @@ var Alignement_bot = (function () {
 
             var onSave = function (treeDivId) {
                 var split = AlignementWorkflow.getAiCheckSplit(treeDivId);
-                AlignementWorkflow.generateSubClassesIdempotent(self.params.source, self.params.targetSource, split.checked, function (err, result) {
+                AlignementWorkflow.generateSubClassesIdempotent(split.checked, function (err, result) {
                     if (err) {
                         window.UI.message("Error inserting subClassOf: " + (err.message || err), true);
                         return;
@@ -301,7 +301,7 @@ var Alignement_bot = (function () {
                     if (result.skipped > 0) {
                         message += " (" + result.skipped + " already created, skipped)";
                     }
-                    window.UI.message(message + " in graph " + self.params.source + "/" + self.params.targetSource, true);
+                    window.UI.message(message + " in " + AlignementWorkflow.ALIGNMENT_SOURCE, true);
                 });
             };
             var onExport = function (treeDivId) {
