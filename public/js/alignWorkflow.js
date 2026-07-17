@@ -285,6 +285,9 @@ var AlignmentWorkflow = (function () {
         if (triples.length === 0) {
             return callback(null, 0);
         }
+        if (!window.Config.sources || !window.Config.sources[self.ALIGNMENT_SOURCE]) {
+            return callback(new Error("alignment source '" + self.ALIGNMENT_SOURCE + "' is not configured on this instance (nothing was saved)"));
+        }
         window.Sparql_generic.insertTriples(self.ALIGNMENT_SOURCE, triples, {}, function (err) {
             if (err) {
                 return callback(err);
@@ -881,6 +884,9 @@ var AlignmentWorkflow = (function () {
         });
         if (triples.length === 0) {
             return callback(null, 0);
+        }
+        if (!window.Config.sources || !window.Config.sources[self.ALIGNMENT_SOURCE]) {
+            return callback(new Error("alignment source '" + self.ALIGNMENT_SOURCE + "' is not configured on this instance (nothing was saved)"));
         }
         window.Sparql_generic.insertTriples(self.ALIGNMENT_SOURCE, triples, {}, function (err) {
             if (err) {
