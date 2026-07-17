@@ -91,6 +91,8 @@ var Alignment_bot = (function () {
                     self.params[key] = _params[key];
                 }
             }
+            // Route the generated triples to the alignment source matching the chosen target.
+            AlignmentWorkflow.setAlignmentSourceForTarget(self.params.targetSource);
             self.myBotEngine.nextStep();
         });
     };

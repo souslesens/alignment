@@ -20,8 +20,15 @@ var AlignmentMakeSimilars = (function () {
      * @returns {void}
      */
     self.initTargetContainers = function () {
-        self.targetSources = ["UNSPSC", "ECLASS"];
+        var candidateTargetSources = ["UNSPSC", "ECLASS"];
+        self.targetSources = candidateTargetSources.filter(function (targetSource) {
+            return Config.sources && Config.sources[targetSource];
+        });
         self.currentTargetSource = null;
+        if (self.targetSources.length === 0) {
+            $("#Alignment_targetContainersDiv").html("<i>no target source available (UNSPSC / ECLASS not configured on this instance)</i>");
+            return;
+        }
         var checkboxLines = self.targetSources.map(function (targetSource) {
             return "<div><label><input type='checkbox' class='Alignment_targetSourceCbx' value='" + targetSource + "'> " + targetSource + "</label></div>";
         });

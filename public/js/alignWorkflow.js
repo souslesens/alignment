@@ -16,10 +16,27 @@ var AlignmentWorkflow = (function () {
     var AI_STEP_BUTTONS_DIV_ID = "Alignment_aiStepBtnDiv";
     // Results panel (framed zone): hidden at startup, revealed when the first result renders.
     var RESULTS_PANEL_DIV_ID = "Alignment_makeResultsPanel";
-    // Registered source receiving ALL generated alignment triples (equivalentClass / subClassOf).
-    // Its graphUri (http://data.totalenergies.com/resource/tsf/ontology/alignment/eclass/) is defined
-    // in sources.json — change this constant to target another alignment source.
+    // Alignment output source per chosen target source: the generated equivalentClass / subClassOf
+    // triples are written into the matching registered source (defined in sources.json).
+    var ALIGNMENT_SOURCE_BY_TARGET = {
+        UNSPSC: "_ALIGNMENT_UNSPSC",
+        ECLASS: "_ALIGNMENT_ECLASS",
+    };
+    // Registered source currently receiving the generated triples; set from the target source at start.
     self.ALIGNMENT_SOURCE = "_ALIGNMENT_ECLASS";
+
+    /**
+     * Selects the alignment output source matching the chosen target source
+     * (UNSPSC -> _ALIGNMENT_UNSPSC, ECLASS -> _ALIGNMENT_ECLASS). Unknown target leaves it unchanged.
+     * @param {string} targetSource - The chosen target source name.
+     * @returns {void}
+     */
+    self.setAlignmentSourceForTarget = function (targetSource) {
+        var mappedSource = ALIGNMENT_SOURCE_BY_TARGET[targetSource];
+        if (mappedSource) {
+            self.ALIGNMENT_SOURCE = mappedSource;
+        }
+    };
 
     self._pairByNodeId = {};
     self._validationDivId = null;
