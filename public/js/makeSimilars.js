@@ -6,7 +6,7 @@ var AlignementMakeSimilars = (function () {
     self.sourceContainerJstreeDivId = "containerWidget_treeDiv";
     self.openSource = function () {
         SourceSelectorWidget.initWidget(["OWL"], "mainDialogDiv", true, self.selectTreeNodeFn, null, {})
-        self.initTargetContainers();
+      //  self.initTargetContainers();
 
     }
 
