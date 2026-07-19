@@ -1,4 +1,4 @@
-// Vendored from npm `pluralize` (MIT) — browser ES module for the Alignement plugin.
+// Vendored from npm `pluralize` (MIT) — browser ES module for the Alignment plugin.
 
 const pluralize = (function () {
 

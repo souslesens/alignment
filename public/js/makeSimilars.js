@@ -1,6 +1,6 @@
-import Alignement_bot from "./alignement_bot.js";
+import Alignment_bot from "./alignment_bot.js";
 
-var AlignementMakeSimilars = (function () {
+var AlignmentMakeSimilars = (function () {
 
     var self = {}
     self.sourceContainerJstreeDivId = "containerWidget_treeDiv";
@@ -10,15 +10,53 @@ var AlignementMakeSimilars = (function () {
 
     }
 
+    /**
+     * Renders the target-source picker: a checkbox list of the alignable target sources
+     * (UNSPSC, ECLASS). Only one can be checked at a time; the checked one becomes the
+     * target and is compared against ALL of its content (no per-container selection).
+     * @function
+     * @name initTargetContainers
+     * @memberof module:AlignmentMakeSimilars
+     * @returns {void}
+     */
     self.initTargetContainers = function () {
-        self.currentTargetSource = "UNSPSC"
-        var options = {
-            jstreeOptions: {selectTreeNodeFn: AlignementMakeSimilar.selectTargetTreeNodeFn},
-            contextMenu: function () {
-                return {}
-            }
+        var candidateTargetSources = ["UNSPSC", "ECLASS"];
+        self.targetSources = candidateTargetSources.filter(function (targetSource) {
+            return Config.sources && Config.sources[targetSource];
+        });
+        self.currentTargetSource = null;
+        if (self.targetSources.length === 0) {
+            $("#Alignment_targetContainersDiv").html("<i>no target source available (UNSPSC / ECLASS not configured on this instance)</i>");
+            return;
         }
-        Containers_tree.search("Alignement_targetContainersDiv", self.currentTargetSource, options);
+        var checkboxLines = self.targetSources.map(function (targetSource) {
+            return "<div><label><input type='checkbox' class='Alignment_targetSourceCbx' value='" + targetSource + "'> " + targetSource + "</label></div>";
+        });
+        var checkboxesHtml = checkboxLines.join("");
+        $("#Alignment_targetContainersDiv").html(checkboxesHtml);
+        $(".Alignment_targetSourceCbx")
+            .off("change")
+            .on("change", function () {
+                self.selectTargetSource(this);
+            });
+    }
+
+    /**
+     * Handles a target-source checkbox: enforces single selection (unchecks the others) and
+     * stores the checked source as the current target (or null when none is checked).
+     * @function
+     * @name selectTargetSource
+     * @memberof module:AlignmentMakeSimilars
+     * @param {HTMLInputElement} checkbox - The checkbox that was toggled.
+     * @returns {void}
+     */
+    self.selectTargetSource = function (checkbox) {
+        $(".Alignment_targetSourceCbx").not(checkbox).prop("checked", false);
+        if (checkbox.checked) {
+            self.currentTargetSource = checkbox.value;
+        } else {
+            self.currentTargetSource = null;
+        }
     }
 
     self.selectTreeNodeFn = function (err, obj) {
@@ -28,11 +66,11 @@ var AlignementMakeSimilars = (function () {
         $("#mainDialogDiv").dialog("close")
         Lineage_sources.loadSources(self.currentSource, function (err) {
 
-            $("#Alignement_sourceContainersDiv").load("modules/tools/containers/containers_widget.html", function () {
+            $("#Alignment_sourceContainersDiv").load("modules/tools/containers/containers_widget.html", function () {
 
                 var options = {
-                    jstreeOptions: {selectTreeNodeFn: AlignementMakeSimilar.selectSourceTreeNodeFn},
-                    contextMenu: AlignementMakeSimilar.getSourceContextJstreeMenu()
+                    jstreeOptions: {selectTreeNodeFn: AlignmentMakeSimilar.selectSourceTreeNodeFn},
+                    contextMenu: AlignmentMakeSimilar.getSourceContextJstreeMenu()
                 }
                 //   $("#mainDialogDiv").addClass("zIndexTop-10");
                 Containers_tree.search(self.sourceContainerJstreeDivId, self.currentSource, options);
@@ -42,15 +80,6 @@ var AlignementMakeSimilars = (function () {
         })
 
 
-    }
-
-
-    self.selectTargetTreeNodeFn = function (event, obj) {
-        self.currentTargetContainerId = obj.node.data.id;
-
-        if (obj.event.button != 2) {
-            Containers_tree.listContainerResources(obj.node, "Alignement_targetContainersDiv");
-        }
     }
 
 
@@ -88,11 +117,13 @@ var AlignementMakeSimilars = (function () {
         var fromSource = self.currentSource;
         var toSource = self.currentTargetSource;
         var fromcontainer = self.currentSourceContainerId;
-        var toContainer = self.currentTargetContainerId;
 
 
-        if (!fromcontainer || !toContainer) {
-            return alert("missing from or to container")
+        if (!fromcontainer) {
+            return alert("no source container selected")
+        }
+        if (!toSource) {
+            return alert("no target source selected (check UNSPSC or ECLASS)")
         }
 
 
@@ -261,15 +292,15 @@ var AlignementMakeSimilars = (function () {
             }
             // Alignment bot: pass bulkSimilars (the structured data behind str) to the workflow:
             // split exact/non-exact -> validate -> generate equivalentClass -> show non-exacts (to LLM)
-            Alignement_bot.start(null, {
+            Alignment_bot.start(null, {
                 bulkSimilars: bulkSimilars,
                 fromWordsMap: fromWordsMap,
                 source: fromSource,
                 targetSource: toSource,
-                botDivId: "Alignement_botDiv",
-                validationDivId: "Alignement_validationDiv",
-                nonExactDivId: "Alignement_nonExactDiv",
-                aiDivId: "Alignement_aiDiv",
+                botDivId: "Alignment_botDiv",
+                validationDivId: "Alignment_validationDiv",
+                nonExactDivId: "Alignment_nonExactDiv",
+                aiDivId: "Alignment_aiDiv",
             })
         })
 
@@ -301,5 +332,5 @@ var AlignementMakeSimilars = (function () {
 })
 ()
 
-export default AlignementMakeSimilars
-window.AlignementMakeSimilar = AlignementMakeSimilars
+export default AlignmentMakeSimilars
+window.AlignmentMakeSimilar = AlignmentMakeSimilars

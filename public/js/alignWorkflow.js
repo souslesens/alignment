@@ -1,4 +1,4 @@
-// Alignement alignment workflow, downstream of AlignementMakeSimilars.bulkSimilars.
+// Alignment alignment workflow, downstream of AlignmentMakeSimilars.bulkSimilars.
 // Results are GROUPED BY SOURCE (like the `str` view): a source never repeats across rows.
 // 1) split candidate pairs into exact (case + English plural) vs non-exact
 // 2) render exact pairs in a checkbox jsTree grouped by source (parent = source, children = targets)
@@ -6,28 +6,37 @@
 // 4) display the remaining non-exact pairs grouped by source (input for the LLM step)
 import { matchesCaseAndPlural } from "./matchUtils.js";
 
-var AlignementWorkflow = (function () {
+var AlignmentWorkflow = (function () {
     var self = {};
 
     var OWL_EQUIVALENT_CLASS = "http://www.w3.org/2002/07/owl#equivalentClass";
     var NODE_ID_SEPARATOR = " ||| ";
     // Left-panel (framed zone) container for the AI-step action buttons (save/export), kept out of the
     // result panel so the result list can use the full height.
-    var AI_STEP_BUTTONS_DIV_ID = "Alignement_aiStepBtnDiv";
-    // Base URI of the temporary alignment graphs: one graph per source pair, named <source1>/<source2>
-    // (e.g. http://souslesens/alignment/CFIHOS-IOF/UNSPSC). The generated equivalentClass / subClassOf
-    // triples are written there instead of into the sources' own graphs.
-    var ALIGNMENT_GRAPH_BASE_URI = "http://souslesens/alignment/";
+    var AI_STEP_BUTTONS_DIV_ID = "Alignment_aiStepBtnDiv";
+    // Results panel (framed zone): hidden at startup, revealed when the first result renders.
+    var RESULTS_PANEL_DIV_ID = "Alignment_makeResultsPanel";
+    // Alignment output source per chosen target source: the generated equivalentClass / subClassOf
+    // triples are written into the matching registered source (defined in sources.json).
+    var ALIGNMENT_SOURCE_BY_TARGET = {
+        UNSPSC: "_ALIGNMENT_UNSPSC",
+        ECLASS: "_ALIGNMENT_ECLASS",
+    };
+    // Registered source currently receiving the generated triples; set from the target source at start.
+    self.ALIGNMENT_SOURCE = "_ALIGNMENT_ECLASS";
 
     /**
-     * Builds the URI of the temporary alignment graph of a source pair (its name is source1/source2).
-     * @param {string} fromSource - Source-from name (e.g. CFIHOS-IOF).
-     * @param {string} targetSource - Target source name (e.g. UNSPSC).
-     * @returns {string} The temporary alignment graph URI.
+     * Selects the alignment output source matching the chosen target source
+     * (UNSPSC -> _ALIGNMENT_UNSPSC, ECLASS -> _ALIGNMENT_ECLASS). Unknown target leaves it unchanged.
+     * @param {string} targetSource - The chosen target source name.
+     * @returns {void}
      */
-    function getAlignmentGraphUri(fromSource, targetSource) {
-        return ALIGNMENT_GRAPH_BASE_URI + encodeURIComponent(fromSource) + "/" + encodeURIComponent(targetSource);
-    }
+    self.setAlignmentSourceForTarget = function (targetSource) {
+        var mappedSource = ALIGNMENT_SOURCE_BY_TARGET[targetSource];
+        if (mappedSource) {
+            self.ALIGNMENT_SOURCE = mappedSource;
+        }
+    };
 
     self._pairByNodeId = {};
     self._validationDivId = null;
@@ -121,7 +130,7 @@ var AlignementWorkflow = (function () {
     }
 
     /**
-     * Splits AlignementMakeSimilars candidate pairs into exact vs non-exact matches.
+     * Splits AlignmentMakeSimilars candidate pairs into exact vs non-exact matches.
      * @param {Object} bulkSimilars - { srcLabel: { tgtUri: { label, score } } }
      * @param {Object} fromWordsMap - { srcLabel: srcUri }
      * @returns {{exact: Array, nonExact: Array}} Pairs { srcUri, srcLabel, tgtUri, tgtLabel, score }.
@@ -173,6 +182,8 @@ var AlignementWorkflow = (function () {
         self._createdSubClassKeys = {};
         // Hide the AI-step action buttons from any previous run (they belong to later steps).
         $("#" + AI_STEP_BUTTONS_DIV_ID).hide();
+        // First results are coming: reveal the results panel (hidden until "list similars" runs).
+        $("#" + RESULTS_PANEL_DIV_ID).show();
         // Reveal this step's section (hidden by default so steps appear in sequence).
         $("#" + divId).parent().show();
 
@@ -256,14 +267,12 @@ var AlignementWorkflow = (function () {
 
     /**
      * Inserts owl:equivalentClass triples (source class -> target class) for the given pairs,
-     * written into the temporary alignment graph named <fromSource>/<targetSource>.
-     * @param {string} fromSource - Source-from name (source 1).
-     * @param {string} targetSource - Target source name (source 2).
+     * written into the ALIGNMENT_SOURCE registered source.
      * @param {Array} pairs - Validated pairs with srcUri / tgtUri.
      * @param {function} callback - callback(err, insertedCount).
      * @returns {void}
      */
-    self.generateEquivalentClasses = function (fromSource, targetSource, pairs, callback) {
+    self.generateEquivalentClasses = function (pairs, callback) {
         if (!pairs || pairs.length === 0) {
             return callback(null, 0);
         }
@@ -276,7 +285,10 @@ var AlignementWorkflow = (function () {
         if (triples.length === 0) {
             return callback(null, 0);
         }
-        window.Sparql_generic.insertTriples(null, triples, { graphUri: getAlignmentGraphUri(fromSource, targetSource) }, function (err) {
+        if (!window.Config.sources || !window.Config.sources[self.ALIGNMENT_SOURCE]) {
+            return callback(new Error("alignment source '" + self.ALIGNMENT_SOURCE + "' is not configured on this instance (nothing was saved)"));
+        }
+        window.Sparql_generic.insertTriples(self.ALIGNMENT_SOURCE, triples, {}, function (err) {
             if (err) {
                 return callback(err);
             }
@@ -287,13 +299,11 @@ var AlignementWorkflow = (function () {
     /**
      * Like generateEquivalentClasses but idempotent across clicks: pairs already created in this session
      * (tracked in self._createdEquivKeys) are skipped, so clicking the button twice only creates the new ones.
-     * @param {string} fromSource - Source-from name (source 1).
-     * @param {string} targetSource - Target source name (source 2).
      * @param {Array} pairs - Checked pairs with srcUri / tgtUri.
      * @param {function} callback - callback(err, { created, skipped }).
      * @returns {void}
      */
-    self.generateEquivalentClassesIdempotent = function (fromSource, targetSource, pairs, callback) {
+    self.generateEquivalentClassesIdempotent = function (pairs, callback) {
         var pairsToCreate = [];
         var skippedCount = 0;
         (pairs || []).forEach(function (pair) {
@@ -310,7 +320,7 @@ var AlignementWorkflow = (function () {
         if (pairsToCreate.length === 0) {
             return callback(null, { created: 0, skipped: skippedCount });
         }
-        self.generateEquivalentClasses(fromSource, targetSource, pairsToCreate, function (err, insertedCount) {
+        self.generateEquivalentClasses(pairsToCreate, function (err, insertedCount) {
             if (err) {
                 return callback(err);
             }
@@ -327,11 +337,9 @@ var AlignementWorkflow = (function () {
      * owl:equivalentClass triples for the currently-checked exact pairs; it does NOT advance the bot.
      * Idempotent: repeated clicks only create pairs not already created in this session.
      * @param {string} divId - The button container div id.
-     * @param {string} fromSource - Source-from name (source 1).
-     * @param {string} targetSource - Target source name (source 2).
      * @returns {void}
      */
-    self.renderGenerateEquivButton = function (divId, fromSource, targetSource) {
+    self.renderGenerateEquivButton = function (divId) {
         var buttonId = divId + "_btn";
         $("#" + divId)
             .html("<button id='" + buttonId + "'>generate equivalent class</button>")
@@ -340,7 +348,7 @@ var AlignementWorkflow = (function () {
             .off("click")
             .on("click", function () {
                 var split = self.getValidatedSplit();
-                self.generateEquivalentClassesIdempotent(fromSource, targetSource, split.checked, function (err, result) {
+                self.generateEquivalentClassesIdempotent(split.checked, function (err, result) {
                     if (err) {
                         var message = err.message;
                         if (!message) {
@@ -353,7 +361,7 @@ var AlignementWorkflow = (function () {
                     if (result.skipped > 0) {
                         message += " (" + result.skipped + " already created, skipped)";
                     }
-                    window.UI.message(message + " in graph " + fromSource + "/" + targetSource, true);
+                    window.UI.message(message + " in " + self.ALIGNMENT_SOURCE, true);
                 });
             });
     };
@@ -588,7 +596,7 @@ var AlignementWorkflow = (function () {
         }
         // "Brtip" dom = Buttons (Export CSV/copy) + table + info + paging, WITHOUT the global search box.
         window.Export.showDataTable(divId + "_table", cols, dataSet, "Brtip", {
-            dataTableDivId: "Alignement_aiTable",
+            dataTableDivId: "Alignment_aiTable",
             paging: true,
             height: "auto",
             width: "100%",
@@ -853,14 +861,12 @@ var AlignementWorkflow = (function () {
     /**
      * Inserts rdfs:subClassOf triples for the given pairs. For "SubclassOf" the source is a subclass of
      * the target; for "SubclassOf inverse" the target is a subclass of the source (source = superclass).
-     * Written into the temporary alignment graph named <fromSource>/<targetSource>.
-     * @param {string} fromSource - Source-from name (source 1).
-     * @param {string} targetSource - Target source name (source 2).
+     * Written into the ALIGNMENT_SOURCE registered source.
      * @param {Array} pairs - Pairs with srcUri / tgtUri / category.
      * @param {function} callback - callback(err, insertedCount).
      * @returns {void}
      */
-    self.generateSubClasses = function (fromSource, targetSource, pairs, callback) {
+    self.generateSubClasses = function (pairs, callback) {
         if (!pairs || pairs.length === 0) {
             return callback(null, 0);
         }
@@ -879,7 +885,10 @@ var AlignementWorkflow = (function () {
         if (triples.length === 0) {
             return callback(null, 0);
         }
-        window.Sparql_generic.insertTriples(null, triples, { graphUri: getAlignmentGraphUri(fromSource, targetSource) }, function (err) {
+        if (!window.Config.sources || !window.Config.sources[self.ALIGNMENT_SOURCE]) {
+            return callback(new Error("alignment source '" + self.ALIGNMENT_SOURCE + "' is not configured on this instance (nothing was saved)"));
+        }
+        window.Sparql_generic.insertTriples(self.ALIGNMENT_SOURCE, triples, {}, function (err) {
             if (err) {
                 return callback(err);
             }
@@ -904,13 +913,11 @@ var AlignementWorkflow = (function () {
     /**
      * Like generateSubClasses but idempotent across clicks: triples already created in this session
      * (tracked in self._createdSubClassKeys) are skipped, so clicking twice only creates the new ones.
-     * @param {string} fromSource - Source-from name (source 1).
-     * @param {string} targetSource - Target source name (source 2).
      * @param {Array} pairs - Checked pairs with srcUri / tgtUri / category.
      * @param {function} callback - callback(err, { created, skipped }).
      * @returns {void}
      */
-    self.generateSubClassesIdempotent = function (fromSource, targetSource, pairs, callback) {
+    self.generateSubClassesIdempotent = function (pairs, callback) {
         var pairsToCreate = [];
         var skippedCount = 0;
         (pairs || []).forEach(function (pair) {
@@ -926,7 +933,7 @@ var AlignementWorkflow = (function () {
         if (pairsToCreate.length === 0) {
             return callback(null, { created: 0, skipped: skippedCount });
         }
-        self.generateSubClasses(fromSource, targetSource, pairsToCreate, function (err, insertedCount) {
+        self.generateSubClasses(pairsToCreate, function (err, insertedCount) {
             if (err) {
                 return callback(err);
             }
@@ -1025,7 +1032,7 @@ var AlignementWorkflow = (function () {
     return self;
 })();
 
-export default AlignementWorkflow;
+export default AlignmentWorkflow;
 if (typeof window !== "undefined") {
-    window.AlignementWorkflow = AlignementWorkflow;
+    window.AlignmentWorkflow = AlignmentWorkflow;
 }
