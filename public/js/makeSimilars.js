@@ -1,12 +1,14 @@
 import Alignment_bot from "./alignment_bot.js";
+import AlignmentUtil from "./alignmentUtil.js"
 
 var AlignmentMakeSimilars = (function () {
 
     var self = {}
+    self.containers = false;// use containers insteadof subClasses
     self.sourceContainerJstreeDivId = "containerWidget_treeDiv";
     self.openSource = function () {
         SourceSelectorWidget.initWidget(["OWL"], "mainDialogDiv", true, self.selectTreeNodeFn, null, {})
-      //  self.initTargetContainers();
+        //  self.initTargetContainers();
 
     }
 
@@ -67,13 +69,40 @@ var AlignmentMakeSimilars = (function () {
         Lineage_sources.loadSources(self.currentSource, function (err) {
 
             $("#Alignment_sourceContainersDiv").load("modules/tools/containers/containers_widget.html", function () {
+                if (self.containers) {
+                    var options = {
+                        jstreeOptions: {selectTreeNodeFn: AlignmentMakeSimilar.selectSourceTreeNodeFn},
+                        contextMenu: AlignmentMakeSimilar.getSourceContextJstreeMenu()
+                    }
+                    //   $("#mainDialogDiv").addClass("zIndexTop-10");
+                    Containers_tree.search(self.sourceContainerJstreeDivId, self.currentSource, options);
+                } else {
+                    Sparql_OWL.getTopConcepts(self.currentSource, {withoutImports: true}, function (err, result) {
+                        if (err) {
+                            return alert(err.responseText || err)
+                        }
+                        var jstreeData = []
+                        result.forEach(function (item) {
+                            jstreeData.push({
+                                id: item.topConcept.value,
+                                text: item.topConceptLabel.value,
+                                data: {
+                                    id: item.topConcept.value,
+                                    label: item.topConceptLabel.value,
+                                    source: self.currentSource
+                                },
+                                parent: "#"
+                            })
+                        })
+                        var options = {
+                            selectTreeNodeFn: AlignmentMakeSimilar.selectSourceTreeNodeFn
 
-                var options = {
-                    jstreeOptions: {selectTreeNodeFn: AlignmentMakeSimilar.selectSourceTreeNodeFn},
-                    contextMenu: AlignmentMakeSimilar.getSourceContextJstreeMenu()
+                        }
+                        JstreeWidget.loadJsTree(self.sourceContainerJstreeDivId, jstreeData, options)
+                    })
                 }
-                //   $("#mainDialogDiv").addClass("zIndexTop-10");
-                Containers_tree.search(self.sourceContainerJstreeDivId, self.currentSource, options);
+
+
             });
 
 
@@ -113,13 +142,18 @@ var AlignmentMakeSimilars = (function () {
 
 
     self.listSimilars = function () {
-
+        self.currentTargetSource = $("#Alignment_targetContainersDiv").jstree(true).get_selected()[0]
         var fromSource = self.currentSource;
         var toSource = self.currentTargetSource;
         var fromcontainer = self.currentSourceContainerId;
 
+        self.allClasses = $("#Alignment_allClassesCBX").prop("checked")
+        if (self.allClasses) {
+            self.containers = false
+        }
 
-        if (!fromcontainer) {
+
+        if (!fromcontainer && !self.allClasses) {
             return alert("no source container selected")
         }
         if (!toSource) {
@@ -130,6 +164,7 @@ var AlignmentMakeSimilars = (function () {
         var fromWordsMap = {}
         var bulkSimilars = {}
         var orphans = []
+        var narrowers={}
 
 
         function searchSimilars(toSource, wordsAll, callback) {
@@ -140,7 +175,7 @@ var AlignmentMakeSimilars = (function () {
             async.eachSeries(slices, function (words, callbackEach) {
 
 
-                var options ={} //{classFilterXX: "http://purl.obolibrary.org/obo/BFO_0000001"}
+                var options = {} //{classFilterXX: "http://purl.obolibrary.org/obo/BFO_0000001"}
                 SearchUtil.getElasticSearchMatches(words, [toSource.toLowerCase()], "match_phrase", 0, 10000, options, function (err, result) {
                     if (err) {
                         return callbackEach(err);
@@ -159,12 +194,18 @@ var AlignmentMakeSimilars = (function () {
                         item.hits.hits.forEach(function (hit) {
                             var nToWord = hit._source.label.split(" ").length;
                             if (nFromWord >= nToWord) {
-                               
+
                                 //keep targets with at most as many words as the source term
                                 if (!similars[fromWord]) {
                                     similars[fromWord] = {}
                                 }
                                 similars[fromWord][hit._source.id] = {
+                                    label: hit._source.label, score: hit._score
+                                }
+                            }else{
+                                if(!narrowers[fromWord])
+                                    narrowers[fromWord]= {}
+                                narrowers[fromWord][hit._source.id] = {
                                     label: hit._source.label, score: hit._score
                                 }
                             }
@@ -178,7 +219,7 @@ var AlignmentMakeSimilars = (function () {
                     callbackEach()
                 })
             }, function (err) {
-
+              var x= narrowers
                 callback(null, {similars, orphans});
 
             })
@@ -189,18 +230,52 @@ var AlignmentMakeSimilars = (function () {
 
             //select from alldescendants
             function (callbackSeries) {
-                Containers_query.getContainerDescendants(self.currentSource, fromcontainer, {leaves: true}, function (err, result) {
-                    if (err) {
-                        return callbackSeries(err);
+
+                if (self.containers) {
+                    Containers_query.getContainerDescendants(self.currentSource, fromcontainer, {leaves: true}, function (err, result) {
+                        if (err) {
+                            return callbackSeries(err);
+                        }
+                        result.results.bindings.forEach(function (item) {
+                            if (item.memberLabel) {
+                                fromWordsMap[item.memberLabel.value] = item.member.value
+                            }
+                        })
+
+                        callbackSeries();
+
+                    })
+                } else {
+                    var fromStr = Sparql_common.getFromStr(self.currentSource, false, true)
+                    var filter = ""
+                    if (!self.allClasses) {
+                        filter = Sparql_common.setFilter("subject", [self.currentSourceContainerId])
                     }
-                    result.results.bindings.forEach(function (item) {
-                        if( item.memberLabel )
-                        fromWordsMap[item.memberLabel.value] = item.member.value
+
+                    var query = "PREFIX owl: <http://www.w3.org/2002/07/owl#>\n" +
+                        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>" +
+                        " prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>" +
+                        " select   distinct * " +
+                        fromStr +
+                        "where  {?child1 rdfs:label ?child1Label. ?child1   rdfs:subClassOf*  ?subject. " +
+                        " FILTER (!isBlank(?subject)) " +
+                        filter + " }"
+
+                    AlignmentUtil.execSparql(self.currentSource, query,function (err, result) {
+                            if (err) {
+                            return callbackSeries(err);
+                        }
+
+                        result.results.bindings.forEach(function (item) {
+                            if (item.child1Label) {
+                                fromWordsMap[item.child1Label.value] = item.child1.value
+                            }
+                        })
+
+                        callbackSeries();
                     })
 
-                    callbackSeries();
-
-                })
+                }
             },
             //search similars fuzzy match
 
@@ -249,7 +324,7 @@ var AlignmentMakeSimilars = (function () {
                     if (err) {
                         return callbackSeries(err)
                     }
-                    orphans=result.orphans
+                    orphans = result.orphans
                     for (var reducedWord in result.similars) {
                         var initialWord = reducedOrphansMap[reducedWord]
                         var similar = result.similars[reducedWord]
@@ -257,7 +332,7 @@ var AlignmentMakeSimilars = (function () {
 
                             bulkSimilars[initialWord] = similar
 
-                        }else{
+                        } else {
 
                         }
                     }
@@ -269,18 +344,17 @@ var AlignmentMakeSimilars = (function () {
             },
             //filter result to keep only toContainer descendants
             function (callbackSeries) {
-            var x=bulkSimilars;
-            var y =orphans
-                var str=""
-                for (var fromWord in bulkSimilars){
-                    str+="\t"+fromWord
+                var x = bulkSimilars;
+                var y = orphans
+                var str = ""
+                for (var fromWord in bulkSimilars) {
+                    str += "\t" + fromWord
                     for (var toUri in bulkSimilars[fromWord]) {
-                      str+="\t"+bulkSimilars[fromWord][toUri].label+"\t"+bulkSimilars[fromWord][toUri].score
+                        str += "\t" + bulkSimilars[fromWord][toUri].label + "\t" + bulkSimilars[fromWord][toUri].score
                     }
-                    str+="\n"
+                    str += "\n"
 
-                    }
-
+                }
 
 
                 callbackSeries()
@@ -292,6 +366,9 @@ var AlignmentMakeSimilars = (function () {
             }
             // Alignment bot: pass bulkSimilars (the structured data behind str) to the workflow:
             // split exact/non-exact -> validate -> generate equivalentClass -> show non-exacts (to LLM)
+
+            self.orphans=orphans
+            self.narrowers=narrowers
             Alignment_bot.start(null, {
                 bulkSimilars: bulkSimilars,
                 fromWordsMap: fromWordsMap,

@@ -5,14 +5,25 @@
     }
 </style>
 
-<div style="display: flex; flex-direction: column; justify-content: center; margin-left: 10px">
-    <div style="display: flex; flex-direction: column; justify-content: center">
-        <span class="tsfSlsv">TSF slsv</span><input id="Alignment_searchAllSourcesTermInput" style="width: 300px; height: 30px; margin: 15px; padding: 5px; margin-left: 0px" value="" />
-        <button onclick="Alignment.test()">test make</button>
-        <div style="display: flex; flex-direction: row"><input type="checkbox" id="Alignment_exactMatchCBX" style="width: 15px !important; margin-right: 5px" />exactMatch</div>
+<div id="Alignment_makeLeftPanel">
+    <div style="flex:1 1 50%;min-width:0;margin-left:10px;">
+        <div>Target source </div>
+        <div id="Alignment_targetContainersDiv" class="browseRightPanel"></div>
     </div>
-    <div>
-        <div id="Alignment_searchListDiv" class="Browse_searchList" style="width: 350px; max-height: 200px; overflow: auto"></div>
-        <div id="Alignment_indexHitsDiv" class="Browse_indexList" style="width: 350px; max-height: 500px; overflow: auto"></div>
+    <hr>
+
+    <div style="flex:0 0 auto;">
+        <button onclick="Alignment.openSource()">choose source</button>
+        <input type="checkbox" id="Alignment_allClassesCBX"/>AllClasses
+        <button onclick="Alignment.listSimilars()">list similars</button>
+    </div>
+
+    <!-- Container trees: source (left half) | UNSPSC (right half) -->
+    <div style="display:flex;flex-direction:column;flex:0 0 auto;margin-top:6px;">
+        <div style="flex:1 1 50%;min-width:0;">
+            <div id="Alignment_sourceContainersDiv" class="browseRightPanel"></div>
+        </div>
+
+
     </div>
 </div>

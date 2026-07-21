@@ -3,6 +3,7 @@
         width: 800px;
         height: 600px;
     }
+
     /* make tab: two columns — left = container trees + bot controls, right = results panel.
        The results panel starts hidden, so the trees stretch over the FULL width until
        "list similars" produces results; then the panel shows on the right and the trees
@@ -11,6 +12,7 @@
         overflow: hidden;
         height: 760px;
     }
+
     #Alignment_makeLeftPanel {
         flex: 1 1 50%;
         min-width: 0;
@@ -18,6 +20,7 @@
         flex-direction: column;
         overflow: auto;
     }
+
     /* the two container trees share the left panel width (half each) */
     #Alignment_makeSimilarsTab #Alignment_sourceContainersDiv,
     #Alignment_makeSimilarsTab #Alignment_targetContainersDiv {
@@ -25,6 +28,7 @@
         height: 280px;
         overflow: auto;
     }
+
     /* bot bubbles + step action buttons: bounded height so the panel keeps its room */
     #Alignment_makeControlsRow {
         display: flex;
@@ -32,9 +36,10 @@
         align-items: flex-start;
         column-gap: 15px;
         flex: 0 0 auto;
-        max-height: 170px;
+        max-height: 400px;
         overflow: auto;
     }
+
     /* framed results zone (right column): hidden until the first results arrive */
     #Alignment_makeResultsPanel {
         flex: 1 1 50%;
@@ -46,7 +51,9 @@
         border: 1px solid #bbb;
         border-radius: 4px;
         padding: 8px;
+        max-width: 800px;
     }
+
     /* one result section per step; the visible one stretches over the full height */
     .Alignment_resultSection {
         flex: 1 1 auto;
@@ -54,6 +61,7 @@
         display: flex;
         flex-direction: column;
     }
+
     /* the scrollable result box grows to fill its section (no fixed max-height) */
     .Alignment_resultBox {
         flex: 1 1 auto;
@@ -65,29 +73,13 @@
 <div id="Alignment_centralPanelDiv" style="display: flex; flex-direction: row; width: 100%; height: 800px">
     <div id="Alignment_rightPanelTabs">
         <ul>
-            <li class="nodeInfosWidget_tabDiv"><a href="#Alignment_makeSimilarsTab">make</a></li>
+            <li class="nodeInfosWidget_tabDiv"><a href="#Alignment_makeSimilarsTab">Similars</a></li>
+            <li class="nodeInfosWidget_tabDiv"><a href="#Alignment_orphansTab">Orphans</a></li>
         </ul>
-
         <div id="Alignment_makeSimilarsTab" style="display:flex;flex-direction: row">
-            <!-- LEFT: action buttons + container trees (full width while no results) + bot controls -->
-            <div id="Alignment_makeLeftPanel">
-                <div style="flex:0 0 auto;">
-                    <button onclick="Alignment.openSource()">choose source</button>
+            <div>
+                <!-- LEFT: action buttons + container trees (full width while no results) + bot controls -->
 
-                    <button onclick="Alignment.listSimilars()">list similars</button>
-                </div>
-
-                <!-- Container trees: source (left half) | UNSPSC (right half) -->
-                <div style="display:flex;flex-direction:row;flex:0 0 auto;margin-top:6px;">
-                    <div style="flex:1 1 50%;min-width:0;">
-                        <div id="Alignment_sourceContainersDiv" class="browseRightPanel"></div>
-                    </div>
-
-                    <div style="flex:1 1 50%;min-width:0;margin-left:10px;">
-                        <div>Target source (check one)</div>
-                        <div id="Alignment_targetContainersDiv" class="browseRightPanel"></div>
-                    </div>
-                </div>
 
                 <!-- Bot bubbles + step action buttons -->
                 <div id="Alignment_makeControlsRow">
@@ -103,46 +95,57 @@
                     <div id="Alignment_aiStepBtnDiv" style="display:none;margin-top:10px;"></div>
                 </div>
             </div>
+            <div>
+                <!-- RIGHT: results panel (framed), hidden until "list similars" produces results -->
+                <div id="Alignment_makeResultsPanel" style="display:none">
+                    <!-- Step "Validate exact matches" (flat 2 columns): revealed after "list similars" -->
+                    <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
+                        <b>Exact matches — uncheck to exclude</b>
+                        <div id="Alignment_validationHeader"
+                             style="font-weight:bold;border-bottom:1px solid #999;padding:2px 0 2px 40px;"></div>
+                        <div id="Alignment_validationDiv" class="Alignment_resultBox"
+                             style="border:1px solid #ddd;padding:5px;"></div>
+                    </div>
 
-            <!-- RIGHT: results panel (framed), hidden until "list similars" produces results -->
-            <div id="Alignment_makeResultsPanel" style="display:none">
-                <!-- Step "Validate exact matches" (flat 2 columns): revealed after "list similars" -->
-                <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
-                    <b>Exact matches — uncheck to exclude</b>
-                    <div id="Alignment_validationHeader" style="font-weight:bold;border-bottom:1px solid #999;padding:2px 0 2px 40px;"></div>
-                    <div id="Alignment_validationDiv" class="Alignment_resultBox" style="border:1px solid #ddd;padding:5px;"></div>
-                </div>
+                    <!-- Step "Non-exact matches" (grouped by source): revealed after "Generate equivalent classes" -->
+                    <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
+                        <b>Non-exact matches (to LLM)</b>
+                        <div id="Alignment_nonExactDiv" class="Alignment_resultBox"
+                             style="border:1px solid #ddd;padding:5px;"></div>
+                    </div>
 
-                <!-- Step "Non-exact matches" (grouped by source): revealed after "Generate equivalent classes" -->
-                <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
-                    <b>Non-exact matches (to LLM)</b>
-                    <div id="Alignment_nonExactDiv" class="Alignment_resultBox" style="border:1px solid #ddd;padding:5px;"></div>
-                </div>
+                    <!-- Step "AI treatment": revealed after the definitions are built (LLM classification result) -->
+                    <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
+                        <b>AI treatment (classified non-exacts)</b>
+                        <div id="Alignment_aiDiv" class="Alignment_resultBox"
+                             style="border:1px solid #ddd;padding:5px;"></div>
+                    </div>
 
-                <!-- Step "AI treatment": revealed after the definitions are built (LLM classification result) -->
-                <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
-                    <b>AI treatment (classified non-exacts)</b>
-                    <div id="Alignment_aiDiv" class="Alignment_resultBox" style="border:1px solid #ddd;padding:5px;"></div>
-                </div>
+                    <!-- Step "Equivalent class (Exact match AI)": jstree pre-checked + Save / Export -->
+                    <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
+                        <b>Equivalent class (Exact match AI)</b>
+                        <div id="Alignment_aiEquivDiv" class="Alignment_resultBox"
+                             style="border:1px solid #ddd;padding:5px;"></div>
+                    </div>
 
-                <!-- Step "Equivalent class (Exact match AI)": jstree pre-checked + Save / Export -->
-                <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
-                    <b>Equivalent class (Exact match AI)</b>
-                    <div id="Alignment_aiEquivDiv" class="Alignment_resultBox" style="border:1px solid #ddd;padding:5px;"></div>
-                </div>
+                    <!-- Step "Subclass / inverse subclass": jstree pre-checked + Save / Export -->
+                    <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
+                        <b>Subclass of / inverse subclass of</b>
+                        <div id="Alignment_aiSubclassDiv" class="Alignment_resultBox"
+                             style="border:1px solid #ddd;padding:5px;"></div>
+                    </div>
 
-                <!-- Step "Subclass / inverse subclass": jstree pre-checked + Save / Export -->
-                <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
-                    <b>Subclass of / inverse subclass of</b>
-                    <div id="Alignment_aiSubclassDiv" class="Alignment_resultBox" style="border:1px solid #ddd;padding:5px;"></div>
-                </div>
-
-                <!-- Step "Remaining (export only)": Not match / Unknown / Other / unchecked -->
-                <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
-                    <b>Remaining (export)</b>
-                    <div id="Alignment_aiRemainingDiv" class="Alignment_resultBox" style="border:1px solid #ddd;padding:5px;"></div>
+                    <!-- Step "Remaining (export only)": Not match / Unknown / Other / unchecked -->
+                    <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
+                        <b>Remaining (export)</b>
+                        <div id="Alignment_aiRemainingDiv" class="Alignment_resultBox"
+                             style="border:1px solid #ddd;padding:5px;"></div>
+                    </div>
                 </div>
             </div>
+        </div>
+        <div id="Alignment_orphansTab" style="display:flex;flex-direction: row">
+
         </div>
     </div>
 </div>

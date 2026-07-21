@@ -19,11 +19,11 @@ var AlignmentWorkflow = (function () {
     // Alignment output source per chosen target source: the generated equivalentClass / subClassOf
     // triples are written into the matching registered source (defined in sources.json).
     var ALIGNMENT_SOURCE_BY_TARGET = {
-        UNSPSC: "_ALIGNMENT_UNSPSC",
-        ECLASS: "_ALIGNMENT_ECLASS",
+        UNSPSC: "ALIGNMENT_UNSPSC",
+        ECLASS: "ALIGNMENT_ECLASS",
     };
     // Registered source currently receiving the generated triples; set from the target source at start.
-    self.ALIGNMENT_SOURCE = "_ALIGNMENT_ECLASS";
+   // self.ALIGNMENT_SOURCE = "ALIGNMENT_ECLASS";
 
     /**
      * Selects the alignment output source matching the chosen target source

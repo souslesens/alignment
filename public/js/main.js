@@ -3,26 +3,7 @@ import AlignmentMakeSimilars from "./makeSimilars.js";
 
 var Alignment = (function () {
     var self = {};
-    self.onLoaded = function () {
-        //  UI.initMenuBar(self.loadSource);
-        self.initUI();
-    };
 
-    self.initUI = function () {
-        UI.showHideRightPanel();
-        $("#lateralPanelDiv").load("modules/tools/alignment/html/alignmentLeftPanel.html", function () {
-            $("#graphDiv").load("modules/tools/alignment/html/alignmentCentralPanel.html", function () {
-                self.init(MainController.currentSource);
-                $("#rightControlPanelDiv").hide();
-                UI.resetWindowSize();
-                var graphDivWidth = $("#graphDiv").css("width");
-                $("#Alignment_centralPanelDiv").css("width", graphDivWidth);
-                $("#Alignment_rightPanelTabs").css("width", graphDivWidth);
-                $("#Alignment_rightPanelTabs").css("width", graphDivWidth);
-                $("#Alignment_graphDiv").css("width", graphDivWidth);
-            });
-        });
-    };
     /**
      * Loads a source and initializes modules for browsing.
      * @function
@@ -39,10 +20,17 @@ var Alignment = (function () {
             if (err) {
                 return MainController.errorAlert(err.responseText);
             }**/
-            $("#lateralPanelDiv").load("/plugins/alignment/html/leftPanel.html", function () {
-                $("#graphDiv").load("/plugins/alignment/html/centralPanel.html", function () {
+            $("#lateralPanelDiv").load("/plugins/alignement/html/leftPanel.html", function (err) {
+                if(err){
+                    console.log(err)
+                }
+                $("#graphDiv").load("/plugins/alignement/html/centralPanel.html", function (err) {
+                    if(err){
+                        console.log(err)
+                    }
                     self.init(self.currentSource);
                     $("#rightControlPanelDiv").hide();
+                    self.loadTargetSourcesTree()
                     UI.resetWindowSize();
                     var graphDivWidth = $("#graphDiv").css("width");
                     $("#Alignment_centralPanelDiv").css("width", graphDivWidth);
@@ -53,6 +41,20 @@ var Alignment = (function () {
             });
         //});
     };
+
+    self.loadTargetSourcesTree=function(){
+  var jstreeData=[{
+      id: "UNSPSC",
+      text:"UNSPSC",
+      parent: "#"
+  },
+      {
+          id: "ECLASS",
+          text:"ECLASS",
+          parent: "#"
+      }]
+       JstreeWidget.loadJsTree("Alignment_targetContainersDiv",jstreeData,{})
+    }
     self.showDialog = function (mainSource) {
         /*   self.loadWhiteboardContent(function (err, result) {
             if (err) {
