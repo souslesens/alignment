@@ -431,6 +431,7 @@ var Alignment_bot = (function () {
                 self.myBotEngine.nextStep();
             }
         },
+
         reindexGraphFn:function(){
             SearchUtil.generateElasticIndex(
                 source,
