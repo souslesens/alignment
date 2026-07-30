@@ -23,7 +23,7 @@ var AlignmentWorkflow = (function () {
         ECLASS: "ALIGNMENT_ECLASS",
     };
     // Registered source currently receiving the generated triples; set from the target source at start.
-   // self.ALIGNMENT_SOURCE = "ALIGNMENT_ECLASS";
+    self.ALIGNMENT_SOURCE = "ALIGNMENT_ECLASS";
 
     /**
      * Selects the alignment output source matching the chosen target source

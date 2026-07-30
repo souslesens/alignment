@@ -20,11 +20,11 @@ var Alignment = (function () {
             if (err) {
                 return MainController.errorAlert(err.responseText);
             }**/
-            $("#lateralPanelDiv").load("/plugins/alignement/html/leftPanel.html", function (err) {
+            $("#lateralPanelDiv").load("/plugins/alignment/html/leftPanel.html", function (err) {
                 if(err){
                     console.log(err)
                 }
-                $("#graphDiv").load("/plugins/alignement/html/centralPanel.html", function (err) {
+                $("#graphDiv").load("/plugins/alignment/html/centralPanel.html", function (err) {
                     if(err){
                         console.log(err)
                     }
