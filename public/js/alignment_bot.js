@@ -3,7 +3,6 @@
 // BotEngineClass is a core SLS module, imported by absolute path (the plugin is served under /plugins/).
 import BotEngineClass from "/vocables/modules/bots/_botEngineClass.js";
 import AlignmentWorkflow from "./alignWorkflow.js";
-import AlignmentUtil from "./alignmentUtil.js";
 
 
 var Alignment_bot = (function () {
@@ -117,22 +116,26 @@ var Alignment_bot = (function () {
                                                                 _OR: {
                                                                     "Generate subclass of and inverse subclass of": {
                                                                         subclassAiFn: {
-                                                                                    createLabelsFn: {
-                                                                                            createSuperClassFn: {
-                                                                                                "Reindex graph": {
-                                                                                                    reindexGraphFn: {
-                                                                                                        _OR: {
-                                                                                                            "Show remaining": {
-                                                                                                                remainingFn: {endFn: {}},
-                                                                                                            },
-                                                                                                            "End": {endFn: {}}
-                                                                                                        }
-                                                                                                    }
-                                                                                                }
-
-
+                                                                            // labels and superclass are no longer bot steps: they are buttons of the
+                                                                            // validation steps (AlignmentWorkflow.renderLabelAndSuperClassButtons).
+                                                                            // "Reindex graph" must stay under _OR: a bare string key is resolved as a
+                                                                            // function name by the engine, which raised "function not defined".
+                                                                            _OR: {
+                                                                                "Reindex graph": {
+                                                                                    reindexGraphFn: {
+                                                                                        _OR: {
+                                                                                            "Show remaining": {
+                                                                                                remainingFn: {endFn: {}},
+                                                                                            },
+                                                                                            "End": {endFn: {}}
+                                                                                        }
+                                                                                    }
                                                                                 },
-                                                                            },
+                                                                                "Show remaining": {
+                                                                                    remainingFn: {endFn: {}},
+                                                                                },
+                                                                                "End": {endFn: {}}
+                                                                            }
                                                                         },
                                                                     },
                                                                 },
@@ -164,8 +167,6 @@ var Alignment_bot = (function () {
         equivalentClassAiFn: "Equivalent class (Exact match AI)",
         subclassAiFn: "Subclass / inverse subclass",
         remainingFn: "Remaining (export)",
-        createLabelsFn: " Create Labels",
-        createSuperClassFn: "Create SuperClass",
         reindexGraphFn:"Reindex target Graph",
 
     };
@@ -200,9 +201,9 @@ var Alignment_bot = (function () {
             AlignmentWorkflow.renderValidation(self.params.validationDivId, self.params.exact, headerInfo, function () {
                 self.myBotEngine.nextStep();
             });
-            // Standalone button: generate equivalentClass for the checked exact matches (idempotent),
-            // decoupled from advancing the bot. Belongs to the validation step only.
-            AlignmentWorkflow.renderGenerateEquivButton(self.params.generateEquivBtnDivId);
+            // Standalone buttons on the checked exact matches (equivalentClass / labels / superclass),
+            // decoupled from advancing the bot. Belong to the validation step only.
+            AlignmentWorkflow.renderValidationStepButtons(self.params.generateEquivBtnDivId);
         },
         viewNonExactFn: function () {
             // Only navigation: demote the unchecked exact pairs to non-exacts and move to the non-exact step.
@@ -364,88 +365,33 @@ var Alignment_bot = (function () {
             AlignmentWorkflow.renderRemaining(self.params.aiRemainingDivId, remaining, self.params.source, self.params.targetSource, onExport);
         },
 
-        createLabelsFn: function () {
-            if (confirm("confirm creation of labels from " + self.params.source)) {
+        // createLabelsFn / createSuperClassFn removed: both wrote into the reference ontology graph
+        // (Config.sources[targetSource].graphUri) instead of the alignment source, and swept the whole
+        // graph regardless of the checked rows. They are now the "generate label" / "create superclass"
+        // buttons of the validation step, in AlignmentWorkflow.renderValidationStepButtons.
 
-                var targetGraph = Config.sources[self.params.targetSource].graphUri
-                var query = "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n" +
-                    "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n" +
-                    "insert {\n" +
-                    "  graph <" + targetGraph + "> {\n" +
-                    "?obj rdfs:label ?label2 .\n" +
-                    "  }\n" +
-                    "}\n" +
-                    " WHERE {\n" +
-                    "  ?obj rdfs:label ?label2 .\n" +
-                    "  {graph <" + targetGraph + ">{\n" +
-                    "       ?sub ?p ?obj .\n" +
-                    "} \n" +
-                    "  }\n" +
-                    "}"
-                AlignmentUtil.execSparql(self.params.targetSource, query, function (err, result) {
-                    if (err) {
-                        self.myBotEngine.error(err.responseText || err)
-                        return self.myBotEngine.end()
-                    }
-                    self.myBotEngine.message("Labels created")
-                    self.myBotEngine.nextStep();
-                })
-
-
-            } else {
-                self.myBotEngine.nextStep();
+        // Reindexes the source that actually received the generated triples (ALIGNMENT_UNSPSC /
+        // ALIGNMENT_ECLASS), not the reference ontology: without it the new equivalentClass,
+        // subClassOf and label triples stay invisible to the ElasticSearch-backed searches.
+        reindexGraphFn: function () {
+            var alignmentSource = AlignmentWorkflow.ALIGNMENT_SOURCE;
+            if (!alignmentSource) {
+                self.myBotEngine.error("no alignment source selected for the chosen target source: nothing to reindex");
+                return self.myBotEngine.end();
             }
-        },
-        createSuperClassFn: function () {
-            var superClass = prompt("Create Classes SuperClass   in" + self.params.targetSource, "owl:Thing")
-            if (superClass) {
-                if (superClass.startsWith("http")) {
-                    superClass = "<" + superClass + ">"
-                }
-                var targetGraph = Config.sources[self.params.targetSource].graphUri
-                var query = "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n" +
-                    "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n" +
-                    "insert {\n" +
-                    "  graph <" + targetGraph + "> {\n" +
-                    "?obj rdfs:subClassOf " + superClass + " .\n" +
-                    "  }\n" +
-                    "}\n" +
-                    " WHERE {\n" +
-                    "  ?obj rdfs:label ?label2 .\n" +
-                    "  {graph <" + targetGraph + ">{\n" +
-                    "       ?sub ?p ?obj .\n" +
-                    "} \n" +
-                    "  }\n" +
-                    "}"
-                AlignmentUtil.execSparql(self.params.targetSource, query, function (err, result) {
-                    if (err) {
-                        self.myBotEngine.error(err.responseText || err)
-                        return self.myBotEngine.end()
-                    }
-                    self.myBotEngine.message("Labels created")
-                    self.myBotEngine.nextStep();
-                })
-
-
-            } else {
-                self.myBotEngine.nextStep();
-            }
-        },
-
-        reindexGraphFn:function(){
+            self.myBotEngine.message("indexing " + alignmentSource + "...");
             SearchUtil.generateElasticIndex(
-                source,
+                alignmentSource,
                 {
                     indexProperties: 1,
                     indexNamedIndividuals: 1,
-                    skipIndividuals: skipIndividuals,
                 },
                 function (err, _result) {
                     if (err) {
                         self.myBotEngine.error(err.responseText || err)
                         return self.myBotEngine.end()
                     }
-                    self.myBotEngine.message("Indexation done")
+                    self.myBotEngine.message(alignmentSource + " indexed")
                     self.myBotEngine.nextStep();
                 },
             );

@@ -16,9 +16,24 @@
     #Alignment_makeLeftPanel {
         flex: 1 1 50%;
         min-width: 0;
+        min-height: 0;
         display: flex;
         flex-direction: column;
         overflow: auto;
+    }
+
+    /* Orphans tab: the tree scrolls, the buttons and the column header stay put. */
+    #Alignment_orphansTab {
+        height: 760px;
+        overflow: hidden;
+    }
+
+    #Alignment_orphansDiv {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
     }
 
     /* the two container trees share the left panel width (half each) */
@@ -48,6 +63,7 @@
         overflow: hidden;
         margin-left: 15px;
         min-width: 0;
+        min-height: 0;
         border: 1px solid #bbb;
         border-radius: 4px;
         padding: 8px;
@@ -77,17 +93,16 @@
             <li class="nodeInfosWidget_tabDiv"><a href="#Alignment_orphansTab">Orphans</a></li>
         </ul>
         <div id="Alignment_makeSimilarsTab" style="display:flex;flex-direction: row">
-            <div>
-                <!-- LEFT: action buttons + container trees (full width while no results) + bot controls -->
-
-
+            <!-- LEFT: bot controls + step action buttons. Direct child of the flex row: any wrapper here
+                 breaks the height chain and the result boxes below grow instead of scrolling. -->
+            <div id="Alignment_makeLeftPanel">
                 <!-- Bot bubbles + step action buttons -->
                 <div id="Alignment_makeControlsRow">
                     <!-- Alignment bot panel (step bubbles: "view non exact match", etc.) -->
                     <div id="Alignment_botDiv" style="margin-top:10px;"></div>
 
-                    <!-- Standalone action (validation step only): generate equivalentClass for the currently
-                         checked exact matches. Idempotent, does NOT advance the bot to the non-exact step. -->
+                    <!-- Standalone actions (validation step only), on the checked exact matches:
+                         equivalentClass / labels / superclass. Idempotent, do NOT advance the bot. -->
                     <div id="Alignment_generateEquivBtnDiv" style="display:none;margin-top:10px;"></div>
 
                     <!-- Action buttons for the AI validation steps (equivalent class AI / subclass / remaining):
@@ -95,57 +110,61 @@
                     <div id="Alignment_aiStepBtnDiv" style="display:none;margin-top:10px;"></div>
                 </div>
             </div>
-            <div>
-                <!-- RIGHT: results panel (framed), hidden until "list similars" produces results -->
-                <div id="Alignment_makeResultsPanel" style="display:none">
-                    <!-- Step "Validate exact matches" (flat 2 columns): revealed after "list similars" -->
-                    <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
-                        <b>Exact matches — uncheck to exclude</b>
-                        <div id="Alignment_validationHeader"
-                             style="font-weight:bold;border-bottom:1px solid #999;padding:2px 0 2px 40px;"></div>
-                        <div id="Alignment_validationDiv" class="Alignment_resultBox"
-                             style="border:1px solid #ddd;padding:5px;"></div>
-                    </div>
 
-                    <!-- Step "Non-exact matches" (grouped by source): revealed after "Generate equivalent classes" -->
-                    <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
-                        <b>Non-exact matches (to LLM)</b>
-                        <div id="Alignment_nonExactDiv" class="Alignment_resultBox"
-                             style="border:1px solid #ddd;padding:5px;"></div>
-                    </div>
+            <!-- RIGHT: results panel (framed), hidden until "list similars" produces results.
+                 Every section title carries its base wording in data-label; AlignmentWorkflow.setResultCount
+                 rewrites it as "<label> (<count>)" once the rows are rendered. -->
+            <div id="Alignment_makeResultsPanel" style="display:none">
+                <!-- Step "Validate exact matches" (flat 2 columns): revealed after "list similars" -->
+                <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
+                    <b class="Alignment_resultTitle" data-label="Exact matches — uncheck to exclude">Exact matches — uncheck to exclude</b>
+                    <div id="Alignment_validationHeader"
+                         style="font-weight:bold;border-bottom:1px solid #999;padding:2px 0 2px 40px;"></div>
+                    <div id="Alignment_validationDiv" class="Alignment_resultBox"
+                         style="border:1px solid #ddd;padding:5px;"></div>
+                </div>
 
-                    <!-- Step "AI treatment": revealed after the definitions are built (LLM classification result) -->
-                    <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
-                        <b>AI treatment (classified non-exacts)</b>
-                        <div id="Alignment_aiDiv" class="Alignment_resultBox"
-                             style="border:1px solid #ddd;padding:5px;"></div>
-                    </div>
+                <!-- Step "Non-exact matches" (grouped by source): revealed after "Generate equivalent classes" -->
+                <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
+                    <b class="Alignment_resultTitle" data-label="Non-exact matches (to LLM)">Non-exact matches (to LLM)</b>
+                    <div id="Alignment_nonExactDiv" class="Alignment_resultBox"
+                         style="border:1px solid #ddd;padding:5px;"></div>
+                </div>
 
-                    <!-- Step "Equivalent class (Exact match AI)": jstree pre-checked + Save / Export -->
-                    <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
-                        <b>Equivalent class (Exact match AI)</b>
-                        <div id="Alignment_aiEquivDiv" class="Alignment_resultBox"
-                             style="border:1px solid #ddd;padding:5px;"></div>
-                    </div>
+                <!-- Step "AI treatment": revealed after the definitions are built (LLM classification result) -->
+                <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
+                    <b class="Alignment_resultTitle" data-label="AI treatment (classified non-exacts)">AI treatment (classified non-exacts)</b>
+                    <div id="Alignment_aiDiv" class="Alignment_resultBox"
+                         style="border:1px solid #ddd;padding:5px;"></div>
+                </div>
 
-                    <!-- Step "Subclass / inverse subclass": jstree pre-checked + Save / Export -->
-                    <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
-                        <b>Subclass of / inverse subclass of</b>
-                        <div id="Alignment_aiSubclassDiv" class="Alignment_resultBox"
-                             style="border:1px solid #ddd;padding:5px;"></div>
-                    </div>
+                <!-- Step "Equivalent class (Exact match AI)": jstree pre-checked + Save / Export -->
+                <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
+                    <b class="Alignment_resultTitle" data-label="Equivalent class (Exact match AI)">Equivalent class (Exact match AI)</b>
+                    <div id="Alignment_aiEquivDiv" class="Alignment_resultBox"
+                         style="border:1px solid #ddd;padding:5px;"></div>
+                </div>
 
-                    <!-- Step "Remaining (export only)": Not match / Unknown / Other / unchecked -->
-                    <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
-                        <b>Remaining (export)</b>
-                        <div id="Alignment_aiRemainingDiv" class="Alignment_resultBox"
-                             style="border:1px solid #ddd;padding:5px;"></div>
-                    </div>
+                <!-- Step "Subclass / inverse subclass": jstree pre-checked + Save / Export -->
+                <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
+                    <b class="Alignment_resultTitle" data-label="Subclass of / inverse subclass of">Subclass of / inverse subclass of</b>
+                    <div id="Alignment_aiSubclassDiv" class="Alignment_resultBox"
+                         style="border:1px solid #ddd;padding:5px;"></div>
+                </div>
+
+                <!-- Step "Remaining (export only)": Not match / Unknown / Other / unchecked -->
+                <div class="Alignment_resultSection" style="display:none;margin-top:10px;">
+                    <b class="Alignment_resultTitle" data-label="Remaining (export)">Remaining (export)</b>
+                    <div id="Alignment_aiRemainingDiv" class="Alignment_resultBox"
+                         style="border:1px solid #ddd;padding:5px;"></div>
                 </div>
             </div>
         </div>
-        <div id="Alignment_orphansTab" style="display:flex;flex-direction: column">
-            <div id="Alignment_orphansDiv" style="border:1px solid #ddd;padding:5px;overflow:auto;height:700px;margin-top:6px;"></div>
+        <!-- Alignment_resultSection: same title/count mechanism as the Similars sections. The step
+             hiding logic works on explicit div ids, so carrying the class here hides nothing. -->
+        <div id="Alignment_orphansTab" class="Alignment_resultSection" style="display:flex;flex-direction: column">
+            <b class="Alignment_resultTitle" data-label="Orphans">Orphans</b>
+            <div id="Alignment_orphansDiv" style="border:1px solid #ddd;padding:5px;margin-top:6px;"></div>
         </div>
     </div>
 </div>

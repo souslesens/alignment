@@ -1,4 +1,5 @@
 import Alignment_bot from "./alignment_bot.js";
+import AlignmentWorkflow from "./alignWorkflow.js";
 import AlignmentUtil from "./alignmentUtil.js"
 
 var AlignmentMakeSimilars = (function () {
@@ -8,8 +9,6 @@ var AlignmentMakeSimilars = (function () {
     // Orphans tab — dialog actions: predicate for "create equivalent class" and target source for "create uri".
     var OWL_EQUIVALENT_CLASS = "http://www.w3.org/2002/07/owl#equivalentClass";
     var ALIGNMENT_TSF_SOURCE = "ALIGNMENT_TSF";
-    // Alignment output source per target source (must match config/sources.json).
-    var ALIGNMENT_SOURCE_BY_TARGET = { UNSPSC: "ALIGNMENT_UNSPSC", ECLASS: "ALIGNMENT_ECLASS" };
     self.sourceContainerJstreeDivId = "containerWidget_treeDiv";
     self.openSource = function () {
         SourceSelectorWidget.initWidget(["OWL"], "mainDialogDiv", true, self.selectTreeNodeFn, null, {})
@@ -500,19 +499,21 @@ var AlignmentMakeSimilars = (function () {
                 distinctOrphans.push(orphanLabel);
             }
         });
+        AlignmentWorkflow.setResultCount(divId, distinctOrphans.length);
         if (distinctOrphans.length === 0) {
             $("#" + divId).html("<i>no orphans</i>");
             return;
         }
         // Action buttons at the top + header line + a dedicated sub-div for the tree.
-        var headerHtml = "<div style='margin-bottom:8px;'>";
+        // Only the tree scrolls, so the buttons and the column header stay visible.
+        var headerHtml = "<div style='margin-bottom:8px;flex:0 0 auto;'>";
         headerHtml += "<button id='" + divId + "_createEquivalentClass' style='margin-right:8px;'>create equivalent class</button>";
         headerHtml += "<button id='" + divId + "_createUri'>create uri</button>";
         headerHtml += "</div>";
-        headerHtml += "<div style='font-weight:bold;border-bottom:1px solid #999;padding:2px 0 2px 40px;'>";
+        headerHtml += "<div style='font-weight:bold;border-bottom:1px solid #999;padding:2px 0 2px 40px;flex:0 0 auto;'>";
         headerHtml += "<span style='display:inline-block;min-width:250px'>orphan</span>";
         headerHtml += "<span>narrowers (more specific targets)</span></div>";
-        headerHtml += "<div id='" + self._orphansTreeDivId + "'></div>";
+        headerHtml += "<div id='" + self._orphansTreeDivId + "' style='flex:1 1 auto;min-height:0;overflow:auto;'></div>";
         $("#" + divId).html(headerHtml);
 
         var jstreeData = distinctOrphans.map(function (orphanLabel) {
@@ -734,8 +735,8 @@ var AlignmentMakeSimilars = (function () {
         if (nodeIds.length === 0) {
             return alert("no orphan has a chosen narrower (click an orphan, then a narrower)");
         }
-        var alignmentSource = ALIGNMENT_SOURCE_BY_TARGET[self.currentTargetSource];
-        if (!alignmentSource || !Config.sources[alignmentSource]) {
+        var alignmentSource = AlignmentWorkflow.getAlignmentSourceForTarget(self.currentTargetSource);
+        if (!alignmentSource) {
             return alert("alignment source for target '" + self.currentTargetSource + "' is not configured on this instance");
         }
         var candidatePairs = [];

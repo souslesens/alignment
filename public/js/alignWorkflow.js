@@ -10,6 +10,7 @@ var AlignmentWorkflow = (function () {
     var self = {};
 
     var OWL_EQUIVALENT_CLASS = "http://www.w3.org/2002/07/owl#equivalentClass";
+    var RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label";
     var NODE_ID_SEPARATOR = " ||| ";
     // Left-panel (framed zone) container for the AI-step action buttons (save/export), kept out of the
     // result panel so the result list can use the full height.
@@ -18,24 +19,47 @@ var AlignmentWorkflow = (function () {
     var RESULTS_PANEL_DIV_ID = "Alignment_makeResultsPanel";
     // Alignment output source per chosen target source: the generated equivalentClass / subClassOf
     // triples are written into the matching registered source (defined in sources.json).
+    // Single source of truth for the whole plugin: the orphans tab of AlignmentMakeSimilars resolves
+    // through getAlignmentSourceForTarget rather than keeping its own copy of this map.
     var ALIGNMENT_SOURCE_BY_TARGET = {
         UNSPSC: "ALIGNMENT_UNSPSC",
         ECLASS: "ALIGNMENT_ECLASS",
     };
     // Registered source currently receiving the generated triples; set from the target source at start.
-    self.ALIGNMENT_SOURCE = "ALIGNMENT_ECLASS";
+    // Null until a known target is selected, so triples are never written into a leftover source.
+    self.ALIGNMENT_SOURCE = null;
 
     /**
-     * Selects the alignment output source matching the chosen target source
-     * (UNSPSC -> _ALIGNMENT_UNSPSC, ECLASS -> _ALIGNMENT_ECLASS). Unknown target leaves it unchanged.
+     * Resolves the alignment output source matching a target source
+     * (UNSPSC -> ALIGNMENT_UNSPSC, ECLASS -> ALIGNMENT_ECLASS).
      * @param {string} targetSource - The chosen target source name.
-     * @returns {void}
+     * @returns {string|null} The registered source name, or null when the target is unknown or its
+     *   source is not registered on this instance.
+     */
+    self.getAlignmentSourceForTarget = function (targetSource) {
+        var mappedSource = ALIGNMENT_SOURCE_BY_TARGET[targetSource];
+        if (!mappedSource) {
+            return null;
+        }
+        if (!window.Config.sources || !window.Config.sources[mappedSource]) {
+            return null;
+        }
+        return mappedSource;
+    };
+
+    /**
+     * Selects the alignment output source for the chosen target source. An unresolved target CLEARS
+     * the selection instead of keeping the previous one: the generators then refuse to write rather
+     * than silently filling the source of an earlier run.
+     * @param {string} targetSource - The chosen target source name.
+     * @returns {string|null} The selected source name, or null.
      */
     self.setAlignmentSourceForTarget = function (targetSource) {
-        var mappedSource = ALIGNMENT_SOURCE_BY_TARGET[targetSource];
-        if (mappedSource) {
-            self.ALIGNMENT_SOURCE = mappedSource;
+        self.ALIGNMENT_SOURCE = self.getAlignmentSourceForTarget(targetSource);
+        if (!self.ALIGNMENT_SOURCE) {
+            window.UI.message("no alignment source registered for target '" + targetSource + "': generated triples cannot be saved", true);
         }
+        return self.ALIGNMENT_SOURCE;
     };
 
     self._pairByNodeId = {};
@@ -51,8 +75,32 @@ var AlignmentWorkflow = (function () {
 
     // Number of class URIs per SPARQL query (keeps the GET URL short enough).
     var DEFINITIONS_BATCH_SIZE = 60;
+    // Same cap for the "which of these subjects already exist" lookups of the label / superclass buttons.
+    var EXISTING_TRIPLES_BATCH_SIZE = 60;
     // Predicate-name fragments that identify a textual definition (mirrors Sparql_common.isTripleObjectString).
     var DEFINITION_PREDICATE_HINTS = ["definition", "comment", "description"];
+
+    /**
+     * Rewrites the title line of the result section holding divId as "<base label> (<count>)".
+     * The base wording lives in the data-label attribute of the .Alignment_resultTitle element, so
+     * repeated renders never stack counts. Every result table displays its total through this one call.
+     * @param {string} divId - The result box div id (the title is looked up from its section).
+     * @param {number} count - Number of rows displayed in that table.
+     * @returns {void}
+     */
+    self.setResultCount = function (divId, count) {
+        var section = $("#" + divId).closest(".Alignment_resultSection");
+        var titleElement = section.find(".Alignment_resultTitle");
+        if (titleElement.length === 0) {
+            return;
+        }
+        var baseLabel = titleElement.attr("data-label");
+        if (!baseLabel) {
+            baseLabel = titleElement.text();
+            titleElement.attr("data-label", baseLabel);
+        }
+        titleElement.text(baseLabel + " (" + count + ")");
+    };
 
     /**
      * Escapes a string for safe HTML insertion.
@@ -64,6 +112,50 @@ var AlignmentWorkflow = (function () {
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;");
+    }
+
+    /**
+     * Readable text of an error, whether it is an Error or a plain string.
+     * @param {Error|string} err - The raised error.
+     * @returns {string} The message to display.
+     */
+    function errorText(err) {
+        if (err && err.message) {
+            return err.message;
+        }
+        return String(err);
+    }
+
+    /**
+     * Makes a literal safe to inline in a SPARQL INSERT: Sparql_generic quotes it with double quotes
+     * without escaping, so a quote or a backslash in a label would break the query.
+     * @param {string} value - The raw literal.
+     * @returns {string} The literal with the characters that would break the query neutralised.
+     */
+    function sanitizeLiteral(value) {
+        var backslashRegex = /\\/g;
+        var doubleQuoteRegex = /"/g;
+        var newLineRegex = /[\r\n]+/g;
+        var withoutBackslash = String(value == null ? "" : value).replace(backslashRegex, " ");
+        var withoutQuote = withoutBackslash.replace(doubleQuoteRegex, "'");
+        return withoutQuote.replace(newLineRegex, " ");
+    }
+
+    /**
+     * Writes a value as a SPARQL term: a full URI gets angle brackets, a prefixed name such as
+     * owl:Thing is left as is, and an already bracketed term is untouched.
+     * @param {string} value - The URI or prefixed name.
+     * @returns {string} The SPARQL term.
+     */
+    function formatSparqlTerm(value) {
+        var term = String(value == null ? "" : value).trim();
+        if (term.indexOf("<") === 0) {
+            return term;
+        }
+        if (term.indexOf("http") === 0) {
+            return "<" + term + ">";
+        }
+        return term;
     }
 
     /**
@@ -186,6 +278,7 @@ var AlignmentWorkflow = (function () {
         $("#" + RESULTS_PANEL_DIV_ID).show();
         // Reveal this step's section (hidden by default so steps appear in sequence).
         $("#" + divId).parent().show();
+        self.setResultCount(divId, exactPairs.length);
 
         // Column header: source name | target source name | score (aligned with the node columns).
         if (headerInfo && headerInfo.headerDivId) {
@@ -285,6 +378,9 @@ var AlignmentWorkflow = (function () {
         if (triples.length === 0) {
             return callback(null, 0);
         }
+        if (!self.ALIGNMENT_SOURCE) {
+            return callback(new Error("no alignment source selected for the chosen target source (nothing was saved)"));
+        }
         if (!window.Config.sources || !window.Config.sources[self.ALIGNMENT_SOURCE]) {
             return callback(new Error("alignment source '" + self.ALIGNMENT_SOURCE + "' is not configured on this instance (nothing was saved)"));
         }
@@ -333,29 +429,244 @@ var AlignmentWorkflow = (function () {
     };
 
     /**
-     * Renders the standalone "generate equivalent class" button. Its ONLY action is to create
-     * owl:equivalentClass triples for the currently-checked exact pairs; it does NOT advance the bot.
-     * Idempotent: repeated clicks only create pairs not already created in this session.
+     * Among the given subject URIs, returns those already carrying predicateUri in the ALIGNMENT_SOURCE
+     * graph, optionally towards a fixed object. Queried in batches so the GET URL stays short.
+     * Asking the graph rather than tracking insertions in memory keeps the label / superclass buttons
+     * accurate across page reloads and across sessions.
+     * @param {Array} subjectUris - The subject URIs to test.
+     * @param {string} predicateUri - The predicate to look for.
+     * @param {string} [objectTerm] - Fixed object (URI or prefixed name); any object when absent.
+     * @param {function} callback - callback(err, { uri: true }).
+     * @returns {void}
+     */
+    self.fetchExistingAlignmentSubjects = function (subjectUris, predicateUri, objectTerm, callback) {
+        var existingSubjects = {};
+        if (!subjectUris || subjectUris.length === 0) {
+            return callback(null, existingSubjects);
+        }
+        var source = self.ALIGNMENT_SOURCE;
+        var fromStr = window.Sparql_common.getFromStr(source, false, true);
+        var serverUrl = window.Config.sources[source].sparql_server.url;
+        var url = serverUrl + "?format=json&query=";
+        if (window.Config.sources[source].sparql_server.no_params) {
+            url = serverUrl;
+        }
+        var objectPattern = "?o";
+        if (objectTerm) {
+            objectPattern = formatSparqlTerm(objectTerm);
+        }
+
+        var index = 0;
+        function nextBatch() {
+            if (index >= subjectUris.length) {
+                return callback(null, existingSubjects);
+            }
+            var batch = subjectUris.slice(index, index + EXISTING_TRIPLES_BATCH_SIZE);
+            index += EXISTING_TRIPLES_BATCH_SIZE;
+            var valuesTerms = batch.map(function (uri) {
+                return "<" + uri + ">";
+            });
+            var query = "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> PREFIX owl: <http://www.w3.org/2002/07/owl#> ";
+            query += "SELECT DISTINCT ?s " + fromStr + " WHERE { VALUES ?s { " + valuesTerms.join(" ") + " } ?s <" + predicateUri + "> " + objectPattern + " }";
+            window.Sparql_proxy.querySPARQL_GET_proxy(url, query, "", { source: source }, function (err, result) {
+                if (err) {
+                    return callback(err);
+                }
+                result.results.bindings.forEach(function (binding) {
+                    existingSubjects[binding.s.value] = true;
+                });
+                nextBatch();
+            });
+        }
+        nextBatch();
+    };
+
+    /**
+     * Inserts into the ALIGNMENT_SOURCE graph the rdfs:label of BOTH sides of the given pairs: the
+     * source class (CFIHOS) and the target class (UNSPSC / ECLASS). Without them both show up there as
+     * bare URIs, since the graph only holds equivalentClass / subClassOf triples. The labels already
+     * travel in the pair, so no lookup is needed. A class labelled twice yields a single triple, and
+     * classes already labelled in the graph are skipped, so clicking again only creates the missing ones.
+     * @param {Array} pairs - Checked pairs with srcUri / srcLabel / tgtUri / tgtLabel.
+     * @param {function} callback - callback(err, { created, skipped }).
+     * @returns {void}
+     */
+    self.generateAlignedLabels = function (pairs, callback) {
+        var labelByUri = {};
+        var candidateUris = [];
+        (pairs || []).forEach(function (pair) {
+            var alignedClasses = [
+                { uri: pair.srcUri, label: pair.srcLabel },
+                { uri: pair.tgtUri, label: pair.tgtLabel },
+            ];
+            alignedClasses.forEach(function (alignedClass) {
+                if (!alignedClass.uri || !alignedClass.label || labelByUri[alignedClass.uri]) {
+                    return;
+                }
+                labelByUri[alignedClass.uri] = alignedClass.label;
+                candidateUris.push(alignedClass.uri);
+            });
+        });
+        if (candidateUris.length === 0) {
+            return callback(null, { created: 0, skipped: 0 });
+        }
+        if (!self.ALIGNMENT_SOURCE) {
+            return callback(new Error("no alignment source selected for the chosen target source (nothing was saved)"));
+        }
+
+        self.fetchExistingAlignmentSubjects(candidateUris, RDFS_LABEL, null, function (err, existingSubjects) {
+            if (err) {
+                return callback(err);
+            }
+            var triples = [];
+            var skippedCount = 0;
+            candidateUris.forEach(function (uri) {
+                if (existingSubjects[uri]) {
+                    skippedCount += 1;
+                    return;
+                }
+                triples.push({ subject: uri, predicate: RDFS_LABEL, object: sanitizeLiteral(labelByUri[uri]), isString: true });
+            });
+            if (triples.length === 0) {
+                return callback(null, { created: 0, skipped: skippedCount });
+            }
+            window.Sparql_generic.insertTriples(self.ALIGNMENT_SOURCE, triples, {}, function (err) {
+                if (err) {
+                    return callback(err);
+                }
+                callback(null, { created: triples.length, skipped: skippedCount });
+            });
+        });
+    };
+
+    /**
+     * Attaches the target-side classes of the given pairs under a common superclass, in the
+     * ALIGNMENT_SOURCE graph, so they show up in the hierarchy instead of floating. Classes already
+     * attached to that same superclass in the graph are skipped.
+     * @param {Array} pairs - Checked pairs with tgtUri.
+     * @param {string} superClassTerm - The superclass URI (or a prefixed name such as owl:Thing).
+     * @param {function} callback - callback(err, { created, skipped }).
+     * @returns {void}
+     */
+    self.generateTargetSuperClass = function (pairs, superClassTerm, callback) {
+        var candidateUris = [];
+        var alreadyListed = {};
+        (pairs || []).forEach(function (pair) {
+            if (!pair.tgtUri || alreadyListed[pair.tgtUri]) {
+                return;
+            }
+            alreadyListed[pair.tgtUri] = 1;
+            candidateUris.push(pair.tgtUri);
+        });
+        if (candidateUris.length === 0) {
+            return callback(null, { created: 0, skipped: 0 });
+        }
+        if (!self.ALIGNMENT_SOURCE) {
+            return callback(new Error("no alignment source selected for the chosen target source (nothing was saved)"));
+        }
+
+        self.fetchExistingAlignmentSubjects(candidateUris, RDFS_SUBCLASSOF, superClassTerm, function (err, existingSubjects) {
+            if (err) {
+                return callback(err);
+            }
+            var triples = [];
+            var skippedCount = 0;
+            candidateUris.forEach(function (uri) {
+                if (existingSubjects[uri]) {
+                    skippedCount += 1;
+                    return;
+                }
+                triples.push({ subject: uri, predicate: RDFS_SUBCLASSOF, object: superClassTerm });
+            });
+            if (triples.length === 0) {
+                return callback(null, { created: 0, skipped: skippedCount });
+            }
+            window.Sparql_generic.insertTriples(self.ALIGNMENT_SOURCE, triples, {}, function (err) {
+                if (err) {
+                    return callback(err);
+                }
+                callback(null, { created: triples.length, skipped: skippedCount });
+            });
+        });
+    };
+
+    /**
+     * Appends the "generate label" / "create superclass" buttons to a button container. Both act on
+     * whatever getCheckedPairs returns at click time, so the exact-match validation step and the AI
+     * validation steps share the same pair of buttons on their own checked rows.
+     * Both used to be bot steps writing into the reference ontology graph (createLabelsFn /
+     * createSuperClassFn), which was the wrong destination.
+     * @param {string} containerDivId - The button container div id (buttons are appended to it).
+     * @param {string} idPrefix - Prefix making the button ids unique across steps.
+     * @param {function} getCheckedPairs - Returns the currently checked pairs of the calling step.
+     * @returns {void}
+     */
+    self.renderLabelAndSuperClassButtons = function (containerDivId, idPrefix, getCheckedPairs) {
+        var labelButtonId = idPrefix + "_labelBtn";
+        var superClassButtonId = idPrefix + "_superClassBtn";
+        var buttonsHtml = "<button id='" + labelButtonId + "' style='margin-right:6px;'>generate label</button>";
+        buttonsHtml += "<button id='" + superClassButtonId + "'>create superclass</button>";
+        $("#" + containerDivId).append(buttonsHtml);
+
+        $("#" + labelButtonId)
+            .off("click")
+            .on("click", function () {
+                var pairs = getCheckedPairs();
+                if (!window.confirm("confirm creation of the source and target labels of " + pairs.length + " checked rows, in " + self.ALIGNMENT_SOURCE)) {
+                    return;
+                }
+                self.generateAlignedLabels(pairs, function (err, result) {
+                    if (err) {
+                        return window.UI.message("Error inserting labels: " + errorText(err), true);
+                    }
+                    var message = result.created + " labels created";
+                    if (result.skipped > 0) {
+                        message += " (" + result.skipped + " already labelled, skipped)";
+                    }
+                    window.UI.message(message + " in " + self.ALIGNMENT_SOURCE, true);
+                });
+            });
+
+        $("#" + superClassButtonId)
+            .off("click")
+            .on("click", function () {
+                var pairs = getCheckedPairs();
+                var superClass = window.prompt("superclass for the " + pairs.length + " checked target classes, in " + self.ALIGNMENT_SOURCE, "owl:Thing");
+                if (!superClass) {
+                    return;
+                }
+                self.generateTargetSuperClass(pairs, superClass, function (err, result) {
+                    if (err) {
+                        return window.UI.message("Error inserting subClassOf: " + errorText(err), true);
+                    }
+                    var message = result.created + " classes attached to " + superClass;
+                    if (result.skipped > 0) {
+                        message += " (" + result.skipped + " already attached, skipped)";
+                    }
+                    window.UI.message(message + " in " + self.ALIGNMENT_SOURCE, true);
+                });
+            });
+    };
+
+    /**
+     * Renders the standalone action buttons of the exact-match validation step. All three act on the
+     * currently checked exact pairs and write into ALIGNMENT_SOURCE; none of them advances the bot.
      * @param {string} divId - The button container div id.
      * @returns {void}
      */
-    self.renderGenerateEquivButton = function (divId) {
-        var buttonId = divId + "_btn";
+    self.renderValidationStepButtons = function (divId) {
+        var equivButtonId = divId + "_equivBtn";
         $("#" + divId)
-            .html("<button id='" + buttonId + "'>generate equivalent class</button>")
+            .html("<button id='" + equivButtonId + "' style='margin-right:6px;'>generate equivalent class</button>")
             .show();
-        $("#" + buttonId)
+
+        $("#" + equivButtonId)
             .off("click")
             .on("click", function () {
                 var split = self.getValidatedSplit();
                 self.generateEquivalentClassesIdempotent(split.checked, function (err, result) {
                     if (err) {
-                        var message = err.message;
-                        if (!message) {
-                            message = err;
-                        }
-                        window.UI.message("Error inserting equivalentClass: " + message, true);
-                        return;
+                        return window.UI.message("Error inserting equivalentClass: " + errorText(err), true);
                     }
                     var message = result.created + " equivalent classes created";
                     if (result.skipped > 0) {
@@ -364,6 +675,10 @@ var AlignmentWorkflow = (function () {
                     window.UI.message(message + " in " + self.ALIGNMENT_SOURCE, true);
                 });
             });
+
+        self.renderLabelAndSuperClassButtons(divId, divId, function () {
+            return self.getValidatedSplit().checked;
+        });
     };
 
     /**
@@ -376,6 +691,7 @@ var AlignmentWorkflow = (function () {
         // Reveal this step's section (hidden until "Generate equivalent classes" has run).
         $("#" + divId).parent().show();
         var pairs = nonExactPairs || [];
+        self.setResultCount(divId, pairs.length);
         if (pairs.length === 0) {
             $("#" + divId).html("<i>no non-exact matches</i>");
             return;
@@ -528,6 +844,7 @@ var AlignmentWorkflow = (function () {
      */
     function renderAiTreatment(divId, response, fromSource, targetSource) {
         $("#" + divId).parent().show();
+        self.setResultCount(divId, (response.classifications || []).length);
         var counts = response.counts || {};
         var usage = response.usage || {};
         var inputTokens = usage.input_tokens || 0;
@@ -798,6 +1115,7 @@ var AlignmentWorkflow = (function () {
      */
     self.renderAiValidationStep = function (divId, pairs, options, handlers) {
         $("#" + divId).parent().show();
+        self.setResultCount(divId, pairs.length);
         var treeDivId = divId + "_tree";
         var saveBtnId = divId + "_save";
         var exportBtnId = divId + "_export";
@@ -823,7 +1141,8 @@ var AlignmentWorkflow = (function () {
         // left panel (AI_STEP_BUTTONS_DIV_ID) so the list can use the full height.
         var html = "<div style='display:flex;flex-direction:column;height:100%;'>";
         if (title) {
-            html += "<div style='margin-bottom:4px;font-weight:bold;flex:0 0 auto;'>" + escapeHtml(title) + " (" + pairs.length + ")</div>";
+            // the row count is displayed by setResultCount in the section title, not repeated here
+            html += "<div style='margin-bottom:4px;font-weight:bold;flex:0 0 auto;'>" + escapeHtml(title) + "</div>";
         }
         // Column header aligned with the jstree node columns (left padding for the checkbox + icon).
         html += "<div style='font-weight:bold;border-bottom:1px solid #ccc;padding:2px 0 2px 44px;flex:0 0 auto;'>";
@@ -836,12 +1155,16 @@ var AlignmentWorkflow = (function () {
         html += "</div>";
         $("#" + divId).html(html);
 
-        // Left panel (framed zone): the two action buttons.
+        // Left panel (framed zone): the two action buttons, plus the label / superclass buttons acting
+        // on the rows checked in THIS step's tree.
         var buttonsHtml = "<button id='" + saveBtnId + "' style='margin-right:6px;'>" + escapeHtml(saveLabel) + "</button>";
-        buttonsHtml += "<button id='" + exportBtnId + "'>Exporter (CSV)</button>";
+        buttonsHtml += "<button id='" + exportBtnId + "' style='margin-right:6px;'>Exporter (CSV)</button>";
         $("#" + AI_STEP_BUTTONS_DIV_ID)
             .html(buttonsHtml)
             .show();
+        self.renderLabelAndSuperClassButtons(AI_STEP_BUTTONS_DIV_ID, divId, function () {
+            return self.getAiCheckSplit(treeDivId).checked;
+        });
 
         // Save / Export act on the current selection WITHOUT advancing (advancing is a bot-bubble step).
         $("#" + saveBtnId)
@@ -884,6 +1207,9 @@ var AlignmentWorkflow = (function () {
         });
         if (triples.length === 0) {
             return callback(null, 0);
+        }
+        if (!self.ALIGNMENT_SOURCE) {
+            return callback(new Error("no alignment source selected for the chosen target source (nothing was saved)"));
         }
         if (!window.Config.sources || !window.Config.sources[self.ALIGNMENT_SOURCE]) {
             return callback(new Error("alignment source '" + self.ALIGNMENT_SOURCE + "' is not configured on this instance (nothing was saved)"));
@@ -999,10 +1325,12 @@ var AlignmentWorkflow = (function () {
      */
     self.renderRemaining = function (divId, pairs, fromSource, targetSource, onExport) {
         $("#" + divId).parent().show();
+        self.setResultCount(divId, (pairs || []).length);
         var exportBtnId = divId + "_export";
         var fromName = fromSource || "source";
         var targetName = targetSource || "target";
-        var html = "<div style='margin-bottom:4px;font-weight:bold;'>Reste à exporter (Not match / Unknown / Other / décochés) — " + pairs.length + " lignes</div>";
+        // the row count is displayed by setResultCount in the section title, not repeated here
+        var html = "<div style='margin-bottom:4px;font-weight:bold;'>Reste à exporter (Not match / Unknown / Other / décochés)</div>";
         html += "<table style='border-collapse:collapse;width:100%;'><thead><tr>";
         html += "<th style='text-align:left;border-bottom:1px solid #ccc;'>" + escapeHtml(fromName) + "</th>";
         html += "<th style='text-align:left;border-bottom:1px solid #ccc;'>" + escapeHtml(targetName) + "</th>";
