@@ -262,7 +262,7 @@ var AlignmentMakeSimilars = (function () {
                         " prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>" +
                         " select   distinct * " +
                         fromStr +
-                        "where  {?child1 rdfs:label ?child1Label. ?child1   rdfs:subClassOf*  ?subject. " +
+                        "where  {?child1 rdfs:label ?child1Label. ?child1   rdfs:subClassOf{0,5}  ?subject. " +
                         " FILTER (!isBlank(?subject)) " +
                         filter + " }"
 
