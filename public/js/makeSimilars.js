@@ -146,7 +146,7 @@ var AlignmentMakeSimilars = (function () {
 
 
     self.listSimilars = function () {
-        self.currentTargetSource = $("#Alignment_targetContainersDiv").jstree(true).get_selected()[0]
+        self.currentTargetSource = Alignment.getSelectedTargetSource()
         var fromSource = self.currentSource;
         var toSource = self.currentTargetSource;
         var fromcontainer = self.currentSourceContainerId;
@@ -161,7 +161,7 @@ var AlignmentMakeSimilars = (function () {
             return alert("no source container selected")
         }
         if (!toSource) {
-            return alert("no target source selected (check UNSPSC or ECLASS)")
+            return alert("no target source selected")
         }
 
 
@@ -256,13 +256,19 @@ var AlignmentMakeSimilars = (function () {
                     if (!self.allClasses) {
                         filter = Sparql_common.setFilter("subject", [self.currentSourceContainerId])
                     }
+                    // skos mode: subClassOf{0,5} also matches the zero-length path, which lets any
+                    // labelled entity through (properties included) when no container filter narrows it
+                    var classTypeConstraint = ""
+                    if (AlignmentWorkflow.isSkosTarget(toSource)) {
+                        classTypeConstraint = "?child1 rdf:type owl:Class. "
+                    }
 
                     var query = "PREFIX owl: <http://www.w3.org/2002/07/owl#>\n" +
                         "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>" +
                         " prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>" +
                         " select   distinct * " +
                         fromStr +
-                        "where  {?child1 rdfs:label ?child1Label. ?child1   rdfs:subClassOf{0,5}  ?subject. " +
+                        "where  {?child1 rdfs:label ?child1Label. " + classTypeConstraint + "?child1   rdfs:subClassOf{0,5}  ?subject. " +
                         " FILTER (!isBlank(?subject)) " +
                         filter + " }"
 

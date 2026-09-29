@@ -11,6 +11,11 @@ var AlignmentWorkflow = (function () {
 
     var OWL_EQUIVALENT_CLASS = "http://www.w3.org/2002/07/owl#equivalentClass";
     var RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label";
+    // Predicates of the SKOS alignment (target picked with "choose source"): the label-identical pairs
+    // and the "Exact match AI" ones become exact matches, the ones the LLM related by subclass become
+    // close matches. They replace the equivalentClass / subClassOf triples of the OWL alignment.
+    self.skosExactMatchUri = "http://www.w3.org/2004/02/skos/core#exactMatch";
+    self.skosCloseMatchUri = "http://www.w3.org/2004/02/skos/core#closeMatch";
     var NODE_ID_SEPARATOR = " ||| ";
     // Left-panel (framed zone) container for the AI-step action buttons (save/export), kept out of the
     // result panel so the result list can use the full height.
@@ -29,14 +34,44 @@ var AlignmentWorkflow = (function () {
     // Null until a known target is selected, so triples are never written into a leftover source.
     self.ALIGNMENT_SOURCE = null;
 
+    // Target source of the run in progress, set at bot start so any step can tell OWL from SKOS alignment.
+    self.currentTargetSource = null;
+
+    /**
+     * Tells the OWL alignment (the target sources listed in the Target source tree: equivalentClass,
+     * labels, superclass) from the SKOS alignment of a source picked with the "choose source" button,
+     * which produces skos exact / close matches instead.
+     * @param {string} [targetSource] - The target source name, defaulting to the run in progress.
+     * @returns {boolean} true when the target is a source picked with "choose source".
+     */
+    self.isSkosTarget = function (targetSource) {
+        var target = targetSource;
+        if (!target) {
+            target = self.currentTargetSource;
+        }
+        if (!target || !window.Alignment) {
+            return false;
+        }
+        return window.Alignment.defaultTargetSources.indexOf(target) < 0;
+    };
+
     /**
      * Resolves the alignment output source matching a target source
-     * (UNSPSC -> ALIGNMENT_UNSPSC, ECLASS -> ALIGNMENT_ECLASS).
+     * (UNSPSC -> ALIGNMENT_UNSPSC, ECLASS -> ALIGNMENT_ECLASS), the target source itself
+     * for a SKOS target.
      * @param {string} targetSource - The chosen target source name.
      * @returns {string|null} The registered source name, or null when the target is unknown or its
      *   source is not registered on this instance.
      */
     self.getAlignmentSourceForTarget = function (targetSource) {
+        // SKOS alignment: the skos matches are written into the target source itself,
+        // not into the source being aligned nor a dedicated ALIGNMENT_* source.
+        if (self.isSkosTarget(targetSource)) {
+            if (!targetSource || !window.Config.sources || !window.Config.sources[targetSource]) {
+                return null;
+            }
+            return targetSource;
+        }
         var mappedSource = ALIGNMENT_SOURCE_BY_TARGET[targetSource];
         if (!mappedSource) {
             return null;
@@ -55,6 +90,7 @@ var AlignmentWorkflow = (function () {
      * @returns {string|null} The selected source name, or null.
      */
     self.setAlignmentSourceForTarget = function (targetSource) {
+        self.currentTargetSource = targetSource;
         self.ALIGNMENT_SOURCE = self.getAlignmentSourceForTarget(targetSource);
         if (!self.ALIGNMENT_SOURCE) {
             window.UI.message("no alignment source registered for target '" + targetSource + "': generated triples cannot be saved", true);
@@ -359,20 +395,22 @@ var AlignmentWorkflow = (function () {
     };
 
     /**
-     * Inserts owl:equivalentClass triples (source class -> target class) for the given pairs,
-     * written into the ALIGNMENT_SOURCE registered source.
-     * @param {Array} pairs - Validated pairs with srcUri / tgtUri.
+     * Inserts the alignment triples <srcUri> predicateUri <tgtUri> for the given pairs, written into
+     * the ALIGNMENT_SOURCE registered source. The predicate is all that separates the OWL alignment
+     * (owl:equivalentClass) from the SKOS one (skos:exactMatch / skos:closeMatch).
+     * @param {Array} pairs - Validated pairs with srcUri / tgtUri (pairs without both are skipped).
+     * @param {string} predicateUri - The predicate linking the source class to the target class.
      * @param {function} callback - callback(err, insertedCount).
      * @returns {void}
      */
-    self.generateEquivalentClasses = function (pairs, callback) {
+    self.generateAlignmentTriples = function (pairs, predicateUri, callback) {
         if (!pairs || pairs.length === 0) {
             return callback(null, 0);
         }
         var triples = [];
         pairs.forEach(function (pair) {
             if (pair.srcUri && pair.tgtUri) {
-                triples.push({ subject: pair.srcUri, predicate: OWL_EQUIVALENT_CLASS, object: pair.tgtUri });
+                triples.push({ subject: pair.srcUri, predicate: predicateUri, object: pair.tgtUri });
             }
         });
         if (triples.length === 0) {
@@ -393,20 +431,22 @@ var AlignmentWorkflow = (function () {
     };
 
     /**
-     * Like generateEquivalentClasses but idempotent across clicks: pairs already created in this session
-     * (tracked in self._createdEquivKeys) are skipped, so clicking the button twice only creates the new ones.
+     * Like generateAlignmentTriples but idempotent across clicks: triples already created in this session
+     * (tracked in self._createdEquivKeys, keyed by predicate too) are skipped, so clicking the button
+     * twice only creates the new ones.
      * @param {Array} pairs - Checked pairs with srcUri / tgtUri.
+     * @param {string} predicateUri - The predicate linking the source class to the target class.
      * @param {function} callback - callback(err, { created, skipped }).
      * @returns {void}
      */
-    self.generateEquivalentClassesIdempotent = function (pairs, callback) {
+    self.generateAlignmentTriplesIdempotent = function (pairs, predicateUri, callback) {
         var pairsToCreate = [];
         var skippedCount = 0;
         (pairs || []).forEach(function (pair) {
             if (!pair.srcUri || !pair.tgtUri) {
                 return;
             }
-            var key = pair.srcUri + NODE_ID_SEPARATOR + pair.tgtUri;
+            var key = predicateUri + NODE_ID_SEPARATOR + pair.srcUri + NODE_ID_SEPARATOR + pair.tgtUri;
             if (self._createdEquivKeys[key]) {
                 skippedCount += 1;
                 return;
@@ -416,16 +456,26 @@ var AlignmentWorkflow = (function () {
         if (pairsToCreate.length === 0) {
             return callback(null, { created: 0, skipped: skippedCount });
         }
-        self.generateEquivalentClasses(pairsToCreate, function (err, insertedCount) {
+        self.generateAlignmentTriples(pairsToCreate, predicateUri, function (err, insertedCount) {
             if (err) {
                 return callback(err);
             }
             pairsToCreate.forEach(function (pair) {
-                var key = pair.srcUri + NODE_ID_SEPARATOR + pair.tgtUri;
+                var key = predicateUri + NODE_ID_SEPARATOR + pair.srcUri + NODE_ID_SEPARATOR + pair.tgtUri;
                 self._createdEquivKeys[key] = 1;
             });
             callback(null, { created: insertedCount, skipped: skippedCount });
         });
+    };
+
+    /**
+     * owl:equivalentClass flavour of generateAlignmentTriplesIdempotent, used by the OWL alignment steps.
+     * @param {Array} pairs - Checked pairs with srcUri / tgtUri.
+     * @param {function} callback - callback(err, { created, skipped }).
+     * @returns {void}
+     */
+    self.generateEquivalentClassesIdempotent = function (pairs, callback) {
+        self.generateAlignmentTriplesIdempotent(pairs, OWL_EQUIVALENT_CLASS, callback);
     };
 
     /**
@@ -602,6 +652,10 @@ var AlignmentWorkflow = (function () {
      * @returns {void}
      */
     self.renderLabelAndSuperClassButtons = function (containerDivId, idPrefix, getCheckedPairs) {
+        // SKOS alignment produces skos matches only: labels and superclass have no place there.
+        if (self.isSkosTarget()) {
+            return;
+        }
         var labelButtonId = idPrefix + "_labelBtn";
         var superClassButtonId = idPrefix + "_superClassBtn";
         var buttonsHtml = "<button id='" + labelButtonId + "' style='margin-right:6px;'>generate label</button>";
@@ -649,12 +703,51 @@ var AlignmentWorkflow = (function () {
     };
 
     /**
-     * Renders the standalone action buttons of the exact-match validation step. All three act on the
+     * Renders the standalone action buttons of the exact-match validation step. All act on the
      * currently checked exact pairs and write into ALIGNMENT_SOURCE; none of them advances the bot.
+     * A SKOS target (source picked with "choose source") gets the single "generate skos exact matches"
+     * button instead of the equivalentClass / label / superclass trio.
      * @param {string} divId - The button container div id.
+     * @param {string} targetSource - The chosen target source name.
+     * @param {string} [fromSource] - The source being aligned, used as the first CSV column header.
      * @returns {void}
      */
-    self.renderValidationStepButtons = function (divId) {
+    self.renderValidationStepButtons = function (divId, targetSource, fromSource) {
+        if (self.isSkosTarget(targetSource)) {
+            var skosExactButtonId = divId + "_skosExactBtn";
+            var skosExactExportButtonId = divId + "_skosExactExportBtn";
+            var skosExactButtonsHtml = "<button id='" + skosExactButtonId + "' style='margin-right:6px;'>generate skos exact matches</button>";
+            skosExactButtonsHtml += "<button id='" + skosExactExportButtonId + "'>Exporter (CSV)</button>";
+            $("#" + divId)
+                .html(skosExactButtonsHtml)
+                .show();
+            $("#" + skosExactExportButtonId)
+                .off("click")
+                .on("click", function () {
+                    var exactMatchColumns = [
+                        { header: fromSource || "source", field: "srcLabel" },
+                        { header: targetSource || "target", field: "tgtLabel" },
+                        { header: "score", field: "score" },
+                    ];
+                    self.exportPairsToCsv(self.getValidatedSplit().checked, exactMatchColumns, "skos_exact_match.csv");
+                });
+            $("#" + skosExactButtonId)
+                .off("click")
+                .on("click", function () {
+                    var split = self.getValidatedSplit();
+                    self.generateAlignmentTriplesIdempotent(split.checked, self.skosExactMatchUri, function (err, result) {
+                        if (err) {
+                            return window.UI.message("Error inserting skos:exactMatch: " + errorText(err), true);
+                        }
+                        var message = result.created + " skos:exactMatch created";
+                        if (result.skipped > 0) {
+                            message += " (" + result.skipped + " already created, skipped)";
+                        }
+                        window.UI.message(message + " in " + self.ALIGNMENT_SOURCE, true);
+                    });
+                });
+            return;
+        }
         var equivButtonId = divId + "_equivBtn";
         $("#" + divId)
             .html("<button id='" + equivButtonId + "' style='margin-right:6px;'>generate equivalent class</button>")
@@ -959,6 +1052,8 @@ var AlignmentWorkflow = (function () {
                 response.fromSource = fromSource;
                 response.targetSource = targetSource;
                 self.aiTreatment = response;
+                // The LLM answers with labels only: keep the pairs it was asked about, they carry the URIs.
+                self._aiNonExacts = nonExacts;
                 renderAiTreatment(divId, response, fromSource, targetSource);
                 callback(null, response);
             },
@@ -1011,6 +1106,21 @@ var AlignmentWorkflow = (function () {
             });
         });
         return enriched;
+    };
+
+    /**
+     * The AI classifications to link with skos:closeMatch: every pair the LLM related to its target,
+     * "Not match" and "Unknown" excluded. URIs are recovered from the non-exact pairs the LLM was
+     * asked about, since it answers with labels only.
+     * @returns {Array} Enriched pairs with srcUri / tgtUri.
+     */
+    self.getAiCloseMatchPairs = function () {
+        if (!self.aiTreatment) {
+            return [];
+        }
+        var enriched = self.enrichWithUris(self.aiTreatment.classifications, self._aiNonExacts);
+        var buckets = self.splitByAiCategory(enriched);
+        return buckets.exactAi.concat(buckets.subclassOf, buckets.subclassOfInverse, buckets.other);
     };
 
     /**

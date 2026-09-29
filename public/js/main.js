@@ -42,19 +42,119 @@ var Alignment = (function () {
         //});
     };
 
-    self.loadTargetSourcesTree=function(){
-  var jstreeData=[{
-      id: "UNSPSC",
-      text:"UNSPSC",
-      parent: "#"
-  },
-      {
-          id: "ECLASS",
-          text:"ECLASS",
-          parent: "#"
-      }]
-       JstreeWidget.loadJsTree("Alignment_targetContainersDiv",jstreeData,{})
-    }
+    self.targetSourcesTreeDivId = "Alignment_targetContainersDiv";
+    self.defaultTargetSources = ["UNSPSC", "ECLASS"];
+    // Suffix marking, in the target tree, the sources picked with "choose source": they are aligned
+    // in SKOS (exact / close matches) where the default targets produce OWL triples.
+    self.skosModeSuffix = " (skos mode)";
+
+    self.loadTargetSourcesTree = function () {
+        var jstreeData = self.defaultTargetSources.map(function (targetSource) {
+            return {
+                id: targetSource,
+                text: targetSource,
+                parent: "#",
+                data: { id: targetSource, label: targetSource, source: targetSource },
+            };
+        });
+        JstreeWidget.loadJsTree(self.targetSourcesTreeDivId, jstreeData, { selectTreeNodeFn: self.selectTargetSourceTreeNodeFn });
+    };
+
+    /**
+     * Keeps the target tree single selection, so listSimilars always reads one and only one target.
+     * @function
+     * @name selectTargetSourceTreeNodeFn
+     * @memberof module:Alignment
+     * @param {Object} evt - jstree select event.
+     * @param {Object} obj - jstree selection object holding the selected node.
+     * @returns {void}
+     */
+    self.selectTargetSourceTreeNodeFn = function (evt, obj) {
+        var targetSourcesTree = $("#" + self.targetSourcesTreeDivId).jstree(true);
+        var selectedNodeIds = targetSourcesTree.get_selected();
+        selectedNodeIds.forEach(function (selectedNodeId) {
+            if (selectedNodeId != obj.node.id) {
+                targetSourcesTree.deselect_node(selectedNodeId);
+            }
+        });
+        self.currentTargetSource = obj.node.id;
+    };
+
+    /**
+     * Returns the target source selected in the target tree, or null when nothing is selected.
+     * Node ids are bare source names: the "(skos mode)" suffix is display only.
+     * @function
+     * @name getSelectedTargetSource
+     * @memberof module:Alignment
+     * @returns {string|null} Name of the selected target source.
+     */
+    self.getSelectedTargetSource = function () {
+        var targetSourcesTree = $("#" + self.targetSourcesTreeDivId).jstree(true);
+        if (!targetSourcesTree) {
+            return null;
+        }
+        var selectedNodeIds = targetSourcesTree.get_selected();
+        if (selectedNodeIds.length === 0) {
+            return null;
+        }
+        return selectedNodeIds[0];
+    };
+
+    /**
+     * Opens the source selector to pick an extra target source, the default targets
+     * (UNSPSC, ECLASS) being excluded since they already are in the target tree.
+     * The picked source is appended to the target tree, marked "(skos mode)", and selected.
+     * @function
+     * @name chooseTargetSource
+     * @memberof module:Alignment
+     * @returns {void}
+     */
+    self.chooseTargetSource = function () {
+        var allSourceLabels = Object.keys(Config.sources);
+        var selectableSourceLabels = allSourceLabels.filter(function (sourceLabel) {
+            return self.defaultTargetSources.indexOf(sourceLabel) < 0;
+        });
+        SourceSelectorWidget.initWidget(["OWL"], "mainDialogDiv", true, self.onTargetSourceSelected, null, { sourcesSelection: selectableSourceLabels });
+    };
+
+    self.onTargetSourceSelected = function (evt, obj) {
+        if (obj.event && obj.event.type == "contextmenu") {
+            return;
+        }
+        if (obj.node.type == "Folder") {
+            $("#sourceSelector_jstreeDiv").jstree(true).open_node(obj.node.id);
+            return;
+        }
+        if (!obj.node.data || obj.node.data.type != "source") {
+            return;
+        }
+        var targetSource = obj.node.data.id;
+        $("#mainDialogDiv").dialog("close");
+        self.setTargetSource(targetSource);
+    };
+
+    /**
+     * Appends the source picked with "choose source" under the default targets, labelled
+     * "<source> (skos mode)", then makes it the only selected target. The node id stays the bare
+     * source name, so every downstream step keeps reading the real source.
+     * @function
+     * @name setTargetSource
+     * @memberof module:Alignment
+     * @param {string} targetSource - Name of the source to select as target.
+     * @returns {void}
+     */
+    self.setTargetSource = function (targetSource) {
+        var targetSourcesTree = $("#" + self.targetSourcesTreeDivId).jstree(true);
+        if (!targetSourcesTree.get_node(targetSource)) {
+            targetSourcesTree.create_node("#", {
+                id: targetSource,
+                text: targetSource + self.skosModeSuffix,
+                data: { id: targetSource, label: targetSource, source: targetSource },
+            });
+        }
+        targetSourcesTree.deselect_all();
+        targetSourcesTree.select_node(targetSource);
+    };
     self.showDialog = function (mainSource) {
         /*   self.loadWhiteboardContent(function (err, result) {
             if (err) {

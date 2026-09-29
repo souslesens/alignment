@@ -59,8 +59,23 @@ var Alignment_bot = (function () {
         }
         var startParams = self.myBotEngine.fillStartParams(arguments);
 
+        var isSkosRun = false;
+        if (_params) {
+            isSkosRun = AlignmentWorkflow.isSkosTarget(_params.targetSource);
+        }
         if (!workflow) {
             workflow = self.workflow;
+            if (isSkosRun) {
+                workflow = self.skosWorkflow;
+            }
+        }
+        // Step titles follow the workflow labels: the AI steps write skos matches instead of OWL triples.
+        if (isSkosRun) {
+            self.functionTitles.equivalentClassAiFn = "Exact match AI (skos:exactMatch)";
+            self.functionTitles.subclassAiFn = "Subclass / inverse subclass (skos:closeMatch)";
+        } else {
+            self.functionTitles.equivalentClassAiFn = "Equivalent class (Exact match AI)";
+            self.functionTitles.subclassAiFn = "Subclass / inverse subclass";
         }
         self.params = {
             bulkSimilars: {},
@@ -98,54 +113,55 @@ var Alignment_bot = (function () {
         });
     };
 
-    self.workflow = {
-        startFn: {
-            splitFn: {
-                showValidationFn: {
-                    _OR: {
-                        "view non exact match": {
-                            viewNonExactFn: {
-                                showNonExactFn: {
-                                    _OR: {
-                                        "AI treatment": {
-                                            buildDefinitionsFn: {
-                                                aiTreatmentFn: {
-                                                    _OR: {
-                                                        "Generate AI equivalent class": {
-                                                            equivalentClassAiFn: {
-                                                                _OR: {
-                                                                    "Generate subclass of and inverse subclass of": {
-                                                                        subclassAiFn: {
-                                                                            // labels and superclass are no longer bot steps: they are buttons of the
-                                                                            // validation steps (AlignmentWorkflow.renderLabelAndSuperClassButtons).
-                                                                            // "Reindex graph" must stay under _OR: a bare string key is resolved as a
-                                                                            // function name by the engine, which raised "function not defined".
-                                                                            _OR: {
-                                                                                "Reindex graph": {
-                                                                                    reindexGraphFn: {
-                                                                                        _OR: {
-                                                                                            "Show remaining": {
-                                                                                                remainingFn: {endFn: {}},
-                                                                                            },
-                                                                                            "End": {endFn: {}}
-                                                                                        }
-                                                                                    }
-                                                                                },
-                                                                                "Show remaining": {
-                                                                                    remainingFn: {endFn: {}},
-                                                                                },
-                                                                                "End": {endFn: {}}
-                                                                            }
-                                                                        },
-                                                                    },
-                                                                },
-                                                            },
-                                                        },
-                                                    },
+    /**
+     * Builds the bot workflow. Its two AI steps are named after the triples they write, which differ
+     * between the OWL alignment (equivalentClass / subClassOf) and the SKOS one (exact / close match),
+     * hence the two labels rather than two copies of the workflow.
+     * @param {string} exactStepLabel - Bubble label of the step writing the exact alignment triples.
+     * @param {string} closeStepLabel - Bubble label of the step writing the subclass / close match triples.
+     * @returns {Object} The workflow object.
+     */
+    self.buildWorkflow = function (exactStepLabel, closeStepLabel) {
+        // labels and superclass are no longer bot steps: they are buttons of the validation steps
+        // (AlignmentWorkflow.renderLabelAndSuperClassButtons).
+        // "Reindex graph" must stay under _OR: a bare string key is resolved as a function name by the
+        // engine, which raised "function not defined".
+        var closeStepAlternatives = {};
+        closeStepAlternatives[closeStepLabel] = {
+            subclassAiFn: {
+                _OR: {
+                    "Reindex graph": {
+                        reindexGraphFn: {
+                            _OR: {
+                                "Show remaining": {remainingFn: {endFn: {}}},
+                                "End": {endFn: {}}
+                            }
+                        }
+                    },
+                    "Show remaining": {remainingFn: {endFn: {}}},
+                    "End": {endFn: {}}
+                }
+            }
+        };
+        var exactStepAlternatives = {};
+        exactStepAlternatives[exactStepLabel] = {
+            equivalentClassAiFn: {_OR: closeStepAlternatives}
+        };
+        return {
+            startFn: {
+                splitFn: {
+                    showValidationFn: {
+                        _OR: {
+                            "view non exact match": {
+                                viewNonExactFn: {
+                                    showNonExactFn: {
+                                        _OR: {
+                                            "AI treatment": {
+                                                buildDefinitionsFn: {
+                                                    aiTreatmentFn: {_OR: exactStepAlternatives},
                                                 },
                                             },
                                         },
-
                                     },
                                 },
                             },
@@ -153,8 +169,11 @@ var Alignment_bot = (function () {
                     },
                 },
             },
-        },
+        };
     };
+
+    self.workflow = self.buildWorkflow("Generate AI equivalent class", "Generate subclass of and inverse subclass of");
+    self.skosWorkflow = self.buildWorkflow("generate skos exact match", "generate skos close match");
 
     self.functionTitles = {
         startFn: "Label alignment",
@@ -203,7 +222,7 @@ var Alignment_bot = (function () {
             });
             // Standalone buttons on the checked exact matches (equivalentClass / labels / superclass),
             // decoupled from advancing the bot. Belong to the validation step only.
-            AlignmentWorkflow.renderValidationStepButtons(self.params.generateEquivBtnDivId);
+            AlignmentWorkflow.renderValidationStepButtons(self.params.generateEquivBtnDivId, self.params.targetSource, self.params.source);
         },
         viewNonExactFn: function () {
             // Only navigation: demote the unchecked exact pairs to non-exacts and move to the non-exact step.
@@ -262,16 +281,31 @@ var Alignment_bot = (function () {
             }
             var columns = aiCsvColumns(self.params.source, self.params.targetSource);
 
-            // "generate AI equivalent class" creates the triples (does NOT advance); "Exporter" exports;
-            // "generate subclass of and inverse subclass of" advances to the subclass step (no save required).
+            var stepTitle = "Exact match AI → equivalentClass";
+            var saveLabel = "generate AI equivalent class";
+            var exportFileName = "equivalent_class_AI.csv";
+            var createdLabel = "equivalent classes";
+            var savePairs = AlignmentWorkflow.generateEquivalentClassesIdempotent;
+            if (AlignmentWorkflow.isSkosTarget(self.params.targetSource)) {
+                stepTitle = "Exact match AI → skos:exactMatch";
+                saveLabel = "generate skos exact match";
+                exportFileName = "skos_exact_match.csv";
+                createdLabel = "skos:exactMatch";
+                savePairs = function (pairs, callback) {
+                    AlignmentWorkflow.generateAlignmentTriplesIdempotent(pairs, AlignmentWorkflow.skosExactMatchUri, callback);
+                };
+            }
+
+            // The save button creates the triples (does NOT advance); "Exporter" exports; the next bubble
+            // advances to the close match / subclass step (no save required).
             var onSave = function (treeDivId) {
                 var split = AlignmentWorkflow.getAiCheckSplit(treeDivId);
-                AlignmentWorkflow.generateEquivalentClassesIdempotent(split.checked, function (err, result) {
+                savePairs(split.checked, function (err, result) {
                     if (err) {
-                        window.UI.message("Error inserting equivalentClass: " + (err.message || err), true);
+                        window.UI.message("Error inserting " + createdLabel + ": " + (err.message || err), true);
                         return;
                     }
-                    var message = result.created + " equivalent classes created";
+                    var message = result.created + " " + createdLabel + " created";
                     if (result.skipped > 0) {
                         message += " (" + result.skipped + " already created, skipped)";
                     }
@@ -280,16 +314,16 @@ var Alignment_bot = (function () {
             };
             var onExport = function (treeDivId) {
                 var split = AlignmentWorkflow.getAiCheckSplit(treeDivId);
-                AlignmentWorkflow.exportPairsToCsv(split.checked, columns, "equivalent_class_AI.csv");
+                AlignmentWorkflow.exportPairsToCsv(split.checked, columns, exportFileName);
             };
             AlignmentWorkflow.renderAiValidationStep(
                 self.params.aiEquivDivId,
                 self.params.aiBuckets.exactAi,
                 {
-                    title: "Exact match AI → equivalentClass",
+                    title: stepTitle,
                     sourceName: self.params.source,
                     targetName: self.params.targetSource,
-                    saveLabel: "generate AI equivalent class",
+                    saveLabel: saveLabel,
                 },
                 {onSave: onSave, onExport: onExport},
             );
@@ -311,14 +345,29 @@ var Alignment_bot = (function () {
             }
             var columns = aiCsvColumns(self.params.source, self.params.targetSource);
 
+            var stepTitle = "SubclassOf / SubclassOf inverse → subClassOf";
+            var saveLabel = "generate subclass of and inverse subclass of";
+            var exportFileName = "subclass_AI.csv";
+            var createdLabel = "subClassOf triples";
+            var savePairs = AlignmentWorkflow.generateSubClassesIdempotent;
+            if (AlignmentWorkflow.isSkosTarget(self.params.targetSource)) {
+                stepTitle = "SubclassOf / SubclassOf inverse → skos:closeMatch";
+                saveLabel = "generate skos close match";
+                exportFileName = "skos_close_match.csv";
+                createdLabel = "skos:closeMatch";
+                savePairs = function (pairs, callback) {
+                    AlignmentWorkflow.generateAlignmentTriplesIdempotent(pairs, AlignmentWorkflow.skosCloseMatchUri, callback);
+                };
+            }
+
             var onSave = function (treeDivId) {
                 var split = AlignmentWorkflow.getAiCheckSplit(treeDivId);
-                AlignmentWorkflow.generateSubClassesIdempotent(split.checked, function (err, result) {
+                savePairs(split.checked, function (err, result) {
                     if (err) {
-                        window.UI.message("Error inserting subClassOf: " + (err.message || err), true);
+                        window.UI.message("Error inserting " + createdLabel + ": " + (err.message || err), true);
                         return;
                     }
-                    var message = result.created + " subClassOf triples created";
+                    var message = result.created + " " + createdLabel + " created";
                     if (result.skipped > 0) {
                         message += " (" + result.skipped + " already created, skipped)";
                     }
@@ -327,16 +376,16 @@ var Alignment_bot = (function () {
             };
             var onExport = function (treeDivId) {
                 var split = AlignmentWorkflow.getAiCheckSplit(treeDivId);
-                AlignmentWorkflow.exportPairsToCsv(split.checked, columns, "subclass_AI.csv");
+                AlignmentWorkflow.exportPairsToCsv(split.checked, columns, exportFileName);
             };
             AlignmentWorkflow.renderAiValidationStep(
                 self.params.aiSubclassDivId,
                 subPairs,
                 {
-                    title: "SubclassOf / SubclassOf inverse → subClassOf",
+                    title: stepTitle,
                     sourceName: self.params.source,
                     targetName: self.params.targetSource,
-                    saveLabel: "generate subclass of and inverse subclass of",
+                    saveLabel: saveLabel,
                 },
                 {onSave: onSave, onExport: onExport},
             );
