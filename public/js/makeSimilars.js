@@ -69,6 +69,9 @@ var AlignmentMakeSimilars = (function () {
 
         // SourceSelectorWidget.showSourceDialog(true, function (source) {
         self.currentSource = obj.node.data.id
+        // a container of the previous source would still be the selected one
+        self.currentSourceContainerId = null
+        AlignmentWorkflow.resetDisplay()
         $("#mainDialogDiv").dialog("close")
         Lineage_sources.loadSources(self.currentSource, function (err) {
 
@@ -85,7 +88,18 @@ var AlignmentMakeSimilars = (function () {
                         if (err) {
                             return alert(err.responseText || err)
                         }
-                        var jstreeData = []
+                        // the chosen source is the root of the tree, its classes hang under it
+                        var jstreeData = [{
+                            id: self.currentSource,
+                            text: "<b>" + self.currentSource + "</b>",
+                            data: {
+                                id: self.currentSource,
+                                label: self.currentSource,
+                                source: self.currentSource,
+                                type: "source"
+                            },
+                            parent: "#"
+                        }]
                         result.forEach(function (item) {
                             jstreeData.push({
                                 id: item.topConcept.value,
@@ -95,12 +109,12 @@ var AlignmentMakeSimilars = (function () {
                                     label: item.topConceptLabel.value,
                                     source: self.currentSource
                                 },
-                                parent: "#"
+                                parent: self.currentSource
                             })
                         })
                         var options = {
-                            selectTreeNodeFn: AlignmentMakeSimilar.selectSourceTreeNodeFn
-
+                            selectTreeNodeFn: AlignmentMakeSimilar.selectSourceTreeNodeFn,
+                            openAll: true
                         }
                         JstreeWidget.loadJsTree(self.sourceContainerJstreeDivId, jstreeData, options)
                     })
@@ -117,6 +131,10 @@ var AlignmentMakeSimilars = (function () {
 
 
     self.selectSourceTreeNodeFn = function (event, obj) {
+        // the source root carries no class: selecting it must not become a container selection
+        if (obj.node.data && obj.node.data.type == "source") {
+            return;
+        }
         self.currentSourceContainerId = obj.node.data.id;
 
         if (obj.event.button != 2) {

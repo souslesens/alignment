@@ -1,4 +1,5 @@
 import AlignmentMakeSimilars from "./makeSimilars.js";
+import AlignmentWorkflow from "./alignWorkflow.js";
 
 
 var Alignment = (function () {
@@ -77,6 +78,10 @@ var Alignment = (function () {
                 targetSourcesTree.deselect_node(selectedNodeId);
             }
         });
+        // results of the previous target would stay on screen and remain exportable / savable
+        if (self.currentTargetSource != obj.node.id) {
+            AlignmentWorkflow.resetDisplay();
+        }
         self.currentTargetSource = obj.node.id;
     };
 

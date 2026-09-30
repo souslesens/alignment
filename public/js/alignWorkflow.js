@@ -100,10 +100,7 @@ var AlignmentWorkflow = (function () {
 
     self._pairByNodeId = {};
     self._validationDivId = null;
-    // equivalentClass pairs already created in this session (key = srcUri + NODE_ID_SEPARATOR + tgtUri),
-    // so the standalone "generate equivalent class" button only creates the missing ones on repeated clicks.
-    self._createdEquivKeys = {};
-    // Same session tracking for the rdfs:subClassOf triples of the AI subclass step
+    // Session tracking for the rdfs:subClassOf triples of the AI subclass step
     // (key = actual triple direction: subject + NODE_ID_SEPARATOR + object).
     self._createdSubClassKeys = {};
     // Definitions of the non-exact classes, fetched from SousLeSens: { from: [{uri,label,definition}], target: [...] }
@@ -136,6 +133,52 @@ var AlignmentWorkflow = (function () {
             titleElement.attr("data-label", baseLabel);
         }
         titleElement.text(baseLabel + " (" + count + ")");
+    };
+
+    /**
+     * Clears the alignment display and the state of the run behind it: bot bubbles, step action
+     * buttons, every result section, the orphans list, and the pairs / definitions / AI answers kept
+     * in memory. Called whenever the source or the target source changes, so a new run can never
+     * display, export or save rows produced for another pair of sources.
+     * @function
+     * @name resetDisplay
+     * @memberof module:AlignmentWorkflow
+     * @returns {void}
+     */
+    self.resetDisplay = function () {
+        var resultsPanel = $("#" + RESULTS_PANEL_DIV_ID);
+        var resultSections = resultsPanel.find(".Alignment_resultSection");
+        resultSections.hide();
+        resultSections.find(".Alignment_resultBox").empty();
+        resultsPanel.hide();
+
+        // the orphans tab is a result section too, but it lives outside the panel and stays visible
+        var orphansTitle = $("#Alignment_orphansTab").children(".Alignment_resultTitle");
+        $("#Alignment_orphansDiv").empty();
+
+        // titles keep the row count of the previous run until their base wording is restored
+        var titlesToReset = resultSections.find(".Alignment_resultTitle").add(orphansTitle);
+        titlesToReset.each(function () {
+            var titleElement = $(this);
+            var baseLabel = titleElement.attr("data-label");
+            if (baseLabel) {
+                titleElement.text(baseLabel);
+            }
+        });
+
+        $("#Alignment_validationHeader").empty();
+        $("#Alignment_botDiv").empty();
+        $("#Alignment_generateEquivBtnDiv").empty().hide();
+        $("#" + AI_STEP_BUTTONS_DIV_ID).empty().hide();
+
+        self.ALIGNMENT_SOURCE = null;
+        self.currentTargetSource = null;
+        self._pairByNodeId = {};
+        self._validationDivId = null;
+        self._createdSubClassKeys = {};
+        self.definitions = null;
+        self.aiTreatment = null;
+        self._aiNonExacts = null;
     };
 
     /**
@@ -306,7 +349,6 @@ var AlignmentWorkflow = (function () {
         self._validationDivId = divId;
         self._pairByNodeId = {};
         // A fresh validation (new "list similars") starts idempotency tracking from scratch.
-        self._createdEquivKeys = {};
         self._createdSubClassKeys = {};
         // Hide the AI-step action buttons from any previous run (they belong to later steps).
         $("#" + AI_STEP_BUTTONS_DIV_ID).hide();
@@ -395,11 +437,31 @@ var AlignmentWorkflow = (function () {
     };
 
     /**
-     * Inserts the alignment triples <srcUri> predicateUri <tgtUri> for the given pairs, written into
-     * the ALIGNMENT_SOURCE registered source. The predicate is all that separates the OWL alignment
-     * (owl:equivalentClass) from the SKOS one (skos:exactMatch / skos:closeMatch).
+     * Builds the triple of one aligned pair. The direction is what places the triple in a graph that
+     * holds its own subject: source -> target for the OWL alignment, written into a dedicated
+     * ALIGNMENT_* source, target -> source for the SKOS one, written into the target source itself.
+     * A triple whose subject is foreign to its graph is unreachable from both sources, neither of
+     * which imports the other.
+     * @param {Object} pair - A candidate pair with srcUri / tgtUri.
+     * @param {string} predicateUri - The predicate linking the two aligned classes.
+     * @returns {Object|null} The triple to insert, or null when the pair misses one of its two URIs.
+     */
+    self.getAlignmentTriple = function (pair, predicateUri) {
+        if (!pair || !pair.srcUri || !pair.tgtUri) {
+            return null;
+        }
+        if (self.isSkosTarget()) {
+            return { subject: pair.tgtUri, predicate: predicateUri, object: pair.srcUri };
+        }
+        return { subject: pair.srcUri, predicate: predicateUri, object: pair.tgtUri };
+    };
+
+    /**
+     * Inserts the alignment triples of the given pairs into the ALIGNMENT_SOURCE registered source.
+     * The predicate is all that separates the OWL alignment (owl:equivalentClass) from the SKOS one
+     * (skos:exactMatch / skos:closeMatch).
      * @param {Array} pairs - Validated pairs with srcUri / tgtUri (pairs without both are skipped).
-     * @param {string} predicateUri - The predicate linking the source class to the target class.
+     * @param {string} predicateUri - The predicate linking the two aligned classes.
      * @param {function} callback - callback(err, insertedCount).
      * @returns {void}
      */
@@ -409,8 +471,9 @@ var AlignmentWorkflow = (function () {
         }
         var triples = [];
         pairs.forEach(function (pair) {
-            if (pair.srcUri && pair.tgtUri) {
-                triples.push({ subject: pair.srcUri, predicate: predicateUri, object: pair.tgtUri });
+            var triple = self.getAlignmentTriple(pair, predicateUri);
+            if (triple) {
+                triples.push(triple);
             }
         });
         if (triples.length === 0) {
@@ -431,40 +494,113 @@ var AlignmentWorkflow = (function () {
     };
 
     /**
-     * Like generateAlignmentTriples but idempotent across clicks: triples already created in this session
-     * (tracked in self._createdEquivKeys, keyed by predicate too) are skipped, so clicking the button
-     * twice only creates the new ones.
+     * Among the given alignment triples, returns those the ALIGNMENT_SOURCE graph already holds.
+     * Subjects are queried in batches, each batch returning every object they already carry for the
+     * predicate, and the exact pairs are matched here: a class legitimately carries several matches,
+     * so subject-level existence would wrongly skip a new one. Asking the graph rather than tracking
+     * insertions in memory keeps the generate buttons accurate across page reloads and sessions.
+     * @param {Array} triples - Candidate triples with subject / object.
+     * @param {string} predicateUri - The predicate they all share.
+     * @param {function} callback - callback(err, { "<subject> ||| <object>": true }).
+     * @returns {void}
+     */
+    self.fetchExistingAlignmentTriples = function (triples, predicateUri, callback) {
+        var existingTriples = {};
+        var source = self.ALIGNMENT_SOURCE;
+        // an unusable alignment source is reported by the insert, which owns that error message
+        if (!triples || triples.length === 0 || !source || !window.Config.sources || !window.Config.sources[source]) {
+            return callback(null, existingTriples);
+        }
+        var subjectUris = [];
+        var seenSubjects = {};
+        triples.forEach(function (triple) {
+            if (!seenSubjects[triple.subject]) {
+                seenSubjects[triple.subject] = true;
+                subjectUris.push(triple.subject);
+            }
+        });
+        var fromStr = window.Sparql_common.getFromStr(source, false, true);
+        var serverUrl = window.Config.sources[source].sparql_server.url;
+        var url = serverUrl + "?format=json&query=";
+        if (window.Config.sources[source].sparql_server.no_params) {
+            url = serverUrl;
+        }
+
+        var index = 0;
+        function nextBatch() {
+            if (index >= subjectUris.length) {
+                return callback(null, existingTriples);
+            }
+            var batch = subjectUris.slice(index, index + EXISTING_TRIPLES_BATCH_SIZE);
+            index += EXISTING_TRIPLES_BATCH_SIZE;
+            var valuesTerms = batch.map(function (subjectUri) {
+                return "<" + subjectUri + ">";
+            });
+            var query = "SELECT DISTINCT ?s ?o " + fromStr + " WHERE { VALUES ?s { " + valuesTerms.join(" ") + " } ?s <" + predicateUri + "> ?o }";
+            window.Sparql_proxy.querySPARQL_GET_proxy(url, query, "", { source: source }, function (err, result) {
+                if (err) {
+                    return callback(err);
+                }
+                result.results.bindings.forEach(function (binding) {
+                    existingTriples[binding.s.value + NODE_ID_SEPARATOR + binding.o.value] = true;
+                });
+                nextBatch();
+            });
+        }
+        nextBatch();
+    };
+
+    /**
+     * Like generateAlignmentTriples but skips what the ALIGNMENT_SOURCE graph already holds, so
+     * clicking the button again only creates the missing triples — after a page reload and in a later
+     * session too, not only within the run that created them. Pairs listed twice count as skipped.
      * @param {Array} pairs - Checked pairs with srcUri / tgtUri.
-     * @param {string} predicateUri - The predicate linking the source class to the target class.
+     * @param {string} predicateUri - The predicate linking the two aligned classes.
      * @param {function} callback - callback(err, { created, skipped }).
      * @returns {void}
      */
     self.generateAlignmentTriplesIdempotent = function (pairs, predicateUri, callback) {
-        var pairsToCreate = [];
+        var candidateTriples = [];
+        var pairByTripleKey = {};
         var skippedCount = 0;
         (pairs || []).forEach(function (pair) {
-            if (!pair.srcUri || !pair.tgtUri) {
+            var triple = self.getAlignmentTriple(pair, predicateUri);
+            if (!triple) {
                 return;
             }
-            var key = predicateUri + NODE_ID_SEPARATOR + pair.srcUri + NODE_ID_SEPARATOR + pair.tgtUri;
-            if (self._createdEquivKeys[key]) {
+            var tripleKey = triple.subject + NODE_ID_SEPARATOR + triple.object;
+            if (pairByTripleKey[tripleKey]) {
                 skippedCount += 1;
                 return;
             }
-            pairsToCreate.push(pair);
+            pairByTripleKey[tripleKey] = pair;
+            candidateTriples.push(triple);
         });
-        if (pairsToCreate.length === 0) {
+        if (candidateTriples.length === 0) {
             return callback(null, { created: 0, skipped: skippedCount });
         }
-        self.generateAlignmentTriples(pairsToCreate, predicateUri, function (err, insertedCount) {
+        self.fetchExistingAlignmentTriples(candidateTriples, predicateUri, function (err, existingTriples) {
             if (err) {
                 return callback(err);
             }
-            pairsToCreate.forEach(function (pair) {
-                var key = predicateUri + NODE_ID_SEPARATOR + pair.srcUri + NODE_ID_SEPARATOR + pair.tgtUri;
-                self._createdEquivKeys[key] = 1;
+            var pairsToCreate = [];
+            candidateTriples.forEach(function (triple) {
+                var tripleKey = triple.subject + NODE_ID_SEPARATOR + triple.object;
+                if (existingTriples[tripleKey]) {
+                    skippedCount += 1;
+                    return;
+                }
+                pairsToCreate.push(pairByTripleKey[tripleKey]);
             });
-            callback(null, { created: insertedCount, skipped: skippedCount });
+            if (pairsToCreate.length === 0) {
+                return callback(null, { created: 0, skipped: skippedCount });
+            }
+            self.generateAlignmentTriples(pairsToCreate, predicateUri, function (err, insertedCount) {
+                if (err) {
+                    return callback(err);
+                }
+                callback(null, { created: insertedCount, skipped: skippedCount });
+            });
         });
     };
 
