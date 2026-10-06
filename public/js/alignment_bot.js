@@ -72,7 +72,7 @@ var Alignment_bot = (function () {
         // Step titles follow the workflow labels: the AI steps write skos matches instead of OWL triples.
         if (isSkosRun) {
             self.functionTitles.equivalentClassAiFn = "Exact match AI (skos:exactMatch)";
-            self.functionTitles.subclassAiFn = "Subclass / inverse subclass (skos:closeMatch)";
+            self.functionTitles.subclassAiFn = "Subclass / inverse subclass (skos:narrower)";
         } else {
             self.functionTitles.equivalentClassAiFn = "Equivalent class (Exact match AI)";
             self.functionTitles.subclassAiFn = "Subclass / inverse subclass";
@@ -115,10 +115,10 @@ var Alignment_bot = (function () {
 
     /**
      * Builds the bot workflow. Its two AI steps are named after the triples they write, which differ
-     * between the OWL alignment (equivalentClass / subClassOf) and the SKOS one (exact / close match),
+     * between the OWL alignment (equivalentClass / subClassOf) and the SKOS one (exact match / narrower),
      * hence the two labels rather than two copies of the workflow.
      * @param {string} exactStepLabel - Bubble label of the step writing the exact alignment triples.
-     * @param {string} closeStepLabel - Bubble label of the step writing the subclass / close match triples.
+     * @param {string} closeStepLabel - Bubble label of the step writing the subclass / narrower triples.
      * @returns {Object} The workflow object.
      */
     self.buildWorkflow = function (exactStepLabel, closeStepLabel) {
@@ -173,7 +173,7 @@ var Alignment_bot = (function () {
     };
 
     self.workflow = self.buildWorkflow("Generate AI equivalent class", "Generate subclass of and inverse subclass of");
-    self.skosWorkflow = self.buildWorkflow("generate skos exact match", "generate skos close match");
+    self.skosWorkflow = self.buildWorkflow("generate skos exact match", "generate skos:narrower");
 
     self.functionTitles = {
         startFn: "Label alignment",
@@ -279,25 +279,25 @@ var Alignment_bot = (function () {
                 self.myBotEngine.nextStep();
                 return;
             }
-            var columns = aiCsvColumns(self.params.source, self.params.targetSource);
 
             var stepTitle = "Exact match AI → equivalentClass";
             var saveLabel = "generate AI equivalent class";
             var exportFileName = "equivalent_class_AI.csv";
             var createdLabel = "equivalent classes";
-            var savePairs = AlignmentWorkflow.generateEquivalentClassesIdempotent;
+            var predicateUri = AlignmentWorkflow.owlEquivalentClassUri;
             if (AlignmentWorkflow.isSkosTarget(self.params.targetSource)) {
                 stepTitle = "Exact match AI → skos:exactMatch";
                 saveLabel = "generate skos exact match";
                 exportFileName = "skos_exact_match.csv";
                 createdLabel = "skos:exactMatch";
-                savePairs = function (pairs, callback) {
-                    AlignmentWorkflow.generateAlignmentTriplesIdempotent(pairs, AlignmentWorkflow.skosExactMatchUri, callback);
-                };
+                predicateUri = AlignmentWorkflow.skosExactMatchUri;
             }
+            var savePairs = function (pairs, callback) {
+                AlignmentWorkflow.generateAlignmentTriplesIdempotent(pairs, predicateUri, callback);
+            };
 
             // The save button creates the triples (does NOT advance); "Exporter" exports; the next bubble
-            // advances to the close match / subclass step (no save required).
+            // advances to the narrower / subclass step (no save required).
             var onSave = function (treeDivId) {
                 var split = AlignmentWorkflow.getAiCheckSplit(treeDivId);
                 savePairs(split.checked, function (err, result) {
@@ -314,7 +314,10 @@ var Alignment_bot = (function () {
             };
             var onExport = function (treeDivId) {
                 var split = AlignmentWorkflow.getAiCheckSplit(treeDivId);
-                AlignmentWorkflow.exportPairsToCsv(split.checked, columns, exportFileName);
+                var getExactTriple = function (pair) {
+                    return AlignmentWorkflow.getAlignmentTriple(pair, predicateUri);
+                };
+                AlignmentWorkflow.exportTriplesToCsv(split.checked, getExactTriple, exportFileName);
             };
             AlignmentWorkflow.renderAiValidationStep(
                 self.params.aiEquivDivId,
@@ -343,7 +346,6 @@ var Alignment_bot = (function () {
                 self.myBotEngine.nextStep();
                 return;
             }
-            var columns = aiCsvColumns(self.params.source, self.params.targetSource);
 
             var stepTitle = "SubclassOf / SubclassOf inverse → subClassOf";
             var saveLabel = "generate subclass of and inverse subclass of";
@@ -351,13 +353,11 @@ var Alignment_bot = (function () {
             var createdLabel = "subClassOf triples";
             var savePairs = AlignmentWorkflow.generateSubClassesIdempotent;
             if (AlignmentWorkflow.isSkosTarget(self.params.targetSource)) {
-                stepTitle = "SubclassOf / SubclassOf inverse → skos:closeMatch";
-                saveLabel = "generate skos close match";
-                exportFileName = "skos_close_match.csv";
-                createdLabel = "skos:closeMatch";
-                savePairs = function (pairs, callback) {
-                    AlignmentWorkflow.generateAlignmentTriplesIdempotent(pairs, AlignmentWorkflow.skosCloseMatchUri, callback);
-                };
+                stepTitle = "SubclassOf / SubclassOf inverse → skos:narrower";
+                saveLabel = "generate skos:narrower";
+                exportFileName = "skos_narrower.csv";
+                createdLabel = "skos:narrower / skos:broader";
+                savePairs = AlignmentWorkflow.generateSkosHierarchyTriplesIdempotent;
             }
 
             var onSave = function (treeDivId) {
@@ -376,7 +376,7 @@ var Alignment_bot = (function () {
             };
             var onExport = function (treeDivId) {
                 var split = AlignmentWorkflow.getAiCheckSplit(treeDivId);
-                AlignmentWorkflow.exportPairsToCsv(split.checked, columns, exportFileName);
+                AlignmentWorkflow.exportTriplesToCsv(split.checked, AlignmentWorkflow.getHierarchyTriple, exportFileName);
             };
             AlignmentWorkflow.renderAiValidationStep(
                 self.params.aiSubclassDivId,

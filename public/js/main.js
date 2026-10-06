@@ -46,7 +46,7 @@ var Alignment = (function () {
     self.targetSourcesTreeDivId = "Alignment_targetContainersDiv";
     self.defaultTargetSources = ["UNSPSC", "ECLASS"];
     // Suffix marking, in the target tree, the sources picked with "choose source": they are aligned
-    // in SKOS (exact / close matches) where the default targets produce OWL triples.
+    // in SKOS (exact matches / narrower) where the default targets produce OWL triples.
     self.skosModeSuffix = " (skos mode)";
 
     self.loadTargetSourcesTree = function () {

@@ -90,7 +90,8 @@
     <div id="Alignment_rightPanelTabs">
         <ul>
             <li class="nodeInfosWidget_tabDiv"><a href="#Alignment_makeSimilarsTab">Similars</a></li>
-            <li class="nodeInfosWidget_tabDiv"><a href="#Alignment_orphansTab">Orphans</a></li>
+            <!-- Orphans tab hidden from the UI; its processing still runs and fills Alignment_orphansDiv -->
+            <li class="nodeInfosWidget_tabDiv" style="display:none"><a href="#Alignment_orphansTab">Orphans</a></li>
         </ul>
         <div id="Alignment_makeSimilarsTab" style="display:flex;flex-direction: row">
             <!-- LEFT: bot controls + step action buttons. Direct child of the flex row: any wrapper here

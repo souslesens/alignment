@@ -9,14 +9,14 @@ import { matchesCaseAndPlural } from "./matchUtils.js";
 var AlignmentWorkflow = (function () {
     var self = {};
 
-    var OWL_EQUIVALENT_CLASS = "http://www.w3.org/2002/07/owl#equivalentClass";
     var RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label";
-    // Predicates of the SKOS alignment (target picked with "choose source"): the label-identical pairs
-    // and the "Exact match AI" ones become exact matches, the ones the LLM related by subclass become
-    // close matches. They replace the equivalentClass / subClassOf triples of the OWL alignment.
+    self.owlEquivalentClassUri = "http://www.w3.org/2002/07/owl#equivalentClass";
+    self.rdfsSubClassOfUri = "http://www.w3.org/2000/01/rdf-schema#subClassOf";
+    self.nodeIdSeparator = " ||| ";
+    // SKOS alignment predicates, replacing equivalentClass / subClassOf of the OWL alignment
     self.skosExactMatchUri = "http://www.w3.org/2004/02/skos/core#exactMatch";
-    self.skosCloseMatchUri = "http://www.w3.org/2004/02/skos/core#closeMatch";
-    var NODE_ID_SEPARATOR = " ||| ";
+    self.skosNarrowerUri = "http://www.w3.org/2004/02/skos/core#narrower";
+    self.skosBroaderUri = "http://www.w3.org/2004/02/skos/core#broader";
     // Left-panel (framed zone) container for the AI-step action buttons (save/export), kept out of the
     // result panel so the result list can use the full height.
     var AI_STEP_BUTTONS_DIV_ID = "Alignment_aiStepBtnDiv";
@@ -40,7 +40,7 @@ var AlignmentWorkflow = (function () {
     /**
      * Tells the OWL alignment (the target sources listed in the Target source tree: equivalentClass,
      * labels, superclass) from the SKOS alignment of a source picked with the "choose source" button,
-     * which produces skos exact / close matches instead.
+     * which produces skos exact matches / narrower instead.
      * @param {string} [targetSource] - The target source name, defaulting to the run in progress.
      * @returns {boolean} true when the target is a source picked with "choose source".
      */
@@ -101,7 +101,7 @@ var AlignmentWorkflow = (function () {
     self._pairByNodeId = {};
     self._validationDivId = null;
     // Session tracking for the rdfs:subClassOf triples of the AI subclass step
-    // (key = actual triple direction: subject + NODE_ID_SEPARATOR + object).
+    // (key = actual triple direction: subject + self.nodeIdSeparator + object).
     self._createdSubClassKeys = {};
     // Definitions of the non-exact classes, fetched from SousLeSens: { from: [{uri,label,definition}], target: [...] }
     self.definitions = null;
@@ -276,7 +276,7 @@ var AlignmentWorkflow = (function () {
      * @returns {string} The node id.
      */
     function pairNodeId(pair) {
-        return sourceKey(pair) + NODE_ID_SEPARATOR + pair.tgtUri;
+        return sourceKey(pair) + self.nodeIdSeparator + pair.tgtUri;
     }
 
     /**
@@ -459,7 +459,7 @@ var AlignmentWorkflow = (function () {
     /**
      * Inserts the alignment triples of the given pairs into the ALIGNMENT_SOURCE registered source.
      * The predicate is all that separates the OWL alignment (owl:equivalentClass) from the SKOS one
-     * (skos:exactMatch / skos:closeMatch).
+     * (skos:exactMatch / skos:narrower / skos:broader).
      * @param {Array} pairs - Validated pairs with srcUri / tgtUri (pairs without both are skipped).
      * @param {string} predicateUri - The predicate linking the two aligned classes.
      * @param {function} callback - callback(err, insertedCount).
@@ -542,7 +542,7 @@ var AlignmentWorkflow = (function () {
                     return callback(err);
                 }
                 result.results.bindings.forEach(function (binding) {
-                    existingTriples[binding.s.value + NODE_ID_SEPARATOR + binding.o.value] = true;
+                    existingTriples[binding.s.value + self.nodeIdSeparator + binding.o.value] = true;
                 });
                 nextBatch();
             });
@@ -568,7 +568,7 @@ var AlignmentWorkflow = (function () {
             if (!triple) {
                 return;
             }
-            var tripleKey = triple.subject + NODE_ID_SEPARATOR + triple.object;
+            var tripleKey = triple.subject + self.nodeIdSeparator + triple.object;
             if (pairByTripleKey[tripleKey]) {
                 skippedCount += 1;
                 return;
@@ -585,7 +585,7 @@ var AlignmentWorkflow = (function () {
             }
             var pairsToCreate = [];
             candidateTriples.forEach(function (triple) {
-                var tripleKey = triple.subject + NODE_ID_SEPARATOR + triple.object;
+                var tripleKey = triple.subject + self.nodeIdSeparator + triple.object;
                 if (existingTriples[tripleKey]) {
                     skippedCount += 1;
                     return;
@@ -611,7 +611,7 @@ var AlignmentWorkflow = (function () {
      * @returns {void}
      */
     self.generateEquivalentClassesIdempotent = function (pairs, callback) {
-        self.generateAlignmentTriplesIdempotent(pairs, OWL_EQUIVALENT_CLASS, callback);
+        self.generateAlignmentTriplesIdempotent(pairs, self.owlEquivalentClassUri, callback);
     };
 
     /**
@@ -751,7 +751,7 @@ var AlignmentWorkflow = (function () {
             return callback(new Error("no alignment source selected for the chosen target source (nothing was saved)"));
         }
 
-        self.fetchExistingAlignmentSubjects(candidateUris, RDFS_SUBCLASSOF, superClassTerm, function (err, existingSubjects) {
+        self.fetchExistingAlignmentSubjects(candidateUris, self.rdfsSubClassOfUri, superClassTerm, function (err, existingSubjects) {
             if (err) {
                 return callback(err);
             }
@@ -762,7 +762,7 @@ var AlignmentWorkflow = (function () {
                     skippedCount += 1;
                     return;
                 }
-                triples.push({ subject: uri, predicate: RDFS_SUBCLASSOF, object: superClassTerm });
+                triples.push({ subject: uri, predicate: self.rdfsSubClassOfUri, object: superClassTerm });
             });
             if (triples.length === 0) {
                 return callback(null, { created: 0, skipped: skippedCount });
@@ -845,7 +845,7 @@ var AlignmentWorkflow = (function () {
      * button instead of the equivalentClass / label / superclass trio.
      * @param {string} divId - The button container div id.
      * @param {string} targetSource - The chosen target source name.
-     * @param {string} [fromSource] - The source being aligned, used as the first CSV column header.
+     * @param {string} [fromSource] - The source being aligned (no longer used: the CSV holds triples only).
      * @returns {void}
      */
     self.renderValidationStepButtons = function (divId, targetSource, fromSource) {
@@ -860,12 +860,10 @@ var AlignmentWorkflow = (function () {
             $("#" + skosExactExportButtonId)
                 .off("click")
                 .on("click", function () {
-                    var exactMatchColumns = [
-                        { header: fromSource || "source", field: "srcLabel" },
-                        { header: targetSource || "target", field: "tgtLabel" },
-                        { header: "score", field: "score" },
-                    ];
-                    self.exportPairsToCsv(self.getValidatedSplit().checked, exactMatchColumns, "skos_exact_match.csv");
+                    var getExactMatchTriple = function (pair) {
+                        return self.getAlignmentTriple(pair, self.skosExactMatchUri);
+                    };
+                    self.exportTriplesToCsv(self.getValidatedSplit().checked, getExactMatchTriple, "skos_exact_match.csv");
                 });
             $("#" + skosExactButtonId)
                 .off("click")
@@ -1205,7 +1203,6 @@ var AlignmentWorkflow = (function () {
 
     // ── AI-classification post-processing (equivalent / subclass / export) ──────
 
-    var RDFS_SUBCLASSOF = "http://www.w3.org/2000/01/rdf-schema#subClassOf";
 
     /**
      * Enriches LLM classifications (label-only) with the srcUri/tgtUri recovered from the original
@@ -1217,14 +1214,14 @@ var AlignmentWorkflow = (function () {
     self.enrichWithUris = function (classifications, pairs) {
         var pairByLabels = {};
         (pairs || []).forEach(function (pair) {
-            var key = pair.srcLabel + NODE_ID_SEPARATOR + pair.tgtLabel;
+            var key = pair.srcLabel + self.nodeIdSeparator + pair.tgtLabel;
             if (!pairByLabels[key]) {
                 pairByLabels[key] = pair;
             }
         });
         var enriched = [];
         (classifications || []).forEach(function (classification) {
-            var key = classification.srcLabel + NODE_ID_SEPARATOR + classification.tgtLabel;
+            var key = classification.srcLabel + self.nodeIdSeparator + classification.tgtLabel;
             var pair = pairByLabels[key];
             var srcUri = null;
             var tgtUri = null;
@@ -1428,8 +1425,81 @@ var AlignmentWorkflow = (function () {
     };
 
     /**
-     * Inserts rdfs:subClassOf triples for the given pairs. For "SubclassOf" the source is a subclass of
-     * the target; for "SubclassOf inverse" the target is a subclass of the source (source = superclass).
+     * @function
+     * @name getHierarchyTriple
+     * @memberof AlignmentWorkflow
+     * Builds the hierarchy triple of a "SubclassOf" / "SubclassOf inverse" pair.
+     * OWL: rdfs:subClassOf from subclass to superclass. SKOS: the target is always the subject
+     * (see getAlignmentTriple), hence target skos:narrower source, or skos:broader when inverse.
+     * @param {Object} pair - Pair with srcUri / tgtUri / category.
+     * @returns {Object|null} { subject, predicate, object }, null when a URI is missing.
+     */
+    self.getHierarchyTriple = function (pair) {
+        if (!pair || !pair.srcUri || !pair.tgtUri) {
+            return null;
+        }
+        var rawCategory = String(pair.category || "");
+        var trimmedCategory = rawCategory.trim();
+        var category = trimmedCategory.toLowerCase();
+        var isInverse = category === "subclassof inverse";
+        if (self.isSkosTarget()) {
+            var skosPredicate = self.skosNarrowerUri;
+            if (isInverse) {
+                skosPredicate = self.skosBroaderUri;
+            }
+            return { subject: pair.tgtUri, predicate: skosPredicate, object: pair.srcUri };
+        }
+        if (isInverse) {
+            return { subject: pair.tgtUri, predicate: self.rdfsSubClassOfUri, object: pair.srcUri };
+        }
+        return { subject: pair.srcUri, predicate: self.rdfsSubClassOfUri, object: pair.tgtUri };
+    };
+
+    /**
+     * @function
+     * @name generateSkosHierarchyTriplesIdempotent
+     * @memberof AlignmentWorkflow
+     * SKOS flavour of generateSubClassesIdempotent: writes skos:narrower and skos:broader triples,
+     * skipping those the alignment graph already holds.
+     * @param {Array} pairs - Checked pairs with srcUri / tgtUri / category.
+     * @param {function} callback - callback(err, { created, skipped }).
+     * @returns {void}
+     */
+    self.generateSkosHierarchyTriplesIdempotent = function (pairs, callback) {
+        var pairsByPredicate = {};
+        pairsByPredicate[self.skosNarrowerUri] = [];
+        pairsByPredicate[self.skosBroaderUri] = [];
+        (pairs || []).forEach(function (pair) {
+            var triple = self.getHierarchyTriple(pair);
+            if (triple) {
+                pairsByPredicate[triple.predicate].push(pair);
+            }
+        });
+
+        var total = { created: 0, skipped: 0 };
+        async.eachSeries(
+            Object.keys(pairsByPredicate),
+            function (predicateUri, callbackEach) {
+                self.generateAlignmentTriplesIdempotent(pairsByPredicate[predicateUri], predicateUri, function (err, result) {
+                    if (err) {
+                        return callbackEach(err);
+                    }
+                    total.created += result.created;
+                    total.skipped += result.skipped;
+                    callbackEach();
+                });
+            },
+            function (err) {
+                if (err) {
+                    return callback(err);
+                }
+                callback(null, total);
+            },
+        );
+    };
+
+    /**
+     * Inserts rdfs:subClassOf triples for the given pairs (direction: see getHierarchyTriple).
      * Written into the ALIGNMENT_SOURCE registered source.
      * @param {Array} pairs - Pairs with srcUri / tgtUri / category.
      * @param {function} callback - callback(err, insertedCount).
@@ -1441,14 +1511,9 @@ var AlignmentWorkflow = (function () {
         }
         var triples = [];
         pairs.forEach(function (pair) {
-            if (!pair.srcUri || !pair.tgtUri) {
-                return;
-            }
-            var category = String(pair.category || "").trim().toLowerCase();
-            if (category === "subclassof inverse") {
-                triples.push({ subject: pair.tgtUri, predicate: RDFS_SUBCLASSOF, object: pair.srcUri });
-            } else {
-                triples.push({ subject: pair.srcUri, predicate: RDFS_SUBCLASSOF, object: pair.tgtUri });
+            var triple = self.getHierarchyTriple(pair);
+            if (triple) {
+                triples.push(triple);
             }
         });
         if (triples.length === 0) {
@@ -1469,18 +1534,17 @@ var AlignmentWorkflow = (function () {
     };
 
     /**
-     * Tracking key of the rdfs:subClassOf triple a pair will produce (its direction depends on the
-     * AI category: "SubclassOf inverse" swaps subject and object).
+     * @function
+     * @name getSubClassTripleKey
+     * @memberof AlignmentWorkflow
+     * Session-tracking key of the hierarchy triple a pair produces (see getHierarchyTriple).
      * @param {Object} pair - Pair with srcUri / tgtUri / category.
-     * @returns {string} The session-tracking key (subject + separator + object).
+     * @returns {string} subject + separator + object.
      */
-    function subClassTripleKey(pair) {
-        var category = String(pair.category || "").trim().toLowerCase();
-        if (category === "subclassof inverse") {
-            return pair.tgtUri + NODE_ID_SEPARATOR + pair.srcUri;
-        }
-        return pair.srcUri + NODE_ID_SEPARATOR + pair.tgtUri;
-    }
+    self.getSubClassTripleKey = function (pair) {
+        var triple = self.getHierarchyTriple(pair);
+        return triple.subject + self.nodeIdSeparator + triple.object;
+    };
 
     /**
      * Like generateSubClasses but idempotent across clicks: triples already created in this session
@@ -1496,7 +1560,7 @@ var AlignmentWorkflow = (function () {
             if (!pair.srcUri || !pair.tgtUri) {
                 return;
             }
-            if (self._createdSubClassKeys[subClassTripleKey(pair)]) {
+            if (self._createdSubClassKeys[self.getSubClassTripleKey(pair)]) {
                 skippedCount += 1;
                 return;
             }
@@ -1510,7 +1574,7 @@ var AlignmentWorkflow = (function () {
                 return callback(err);
             }
             pairsToCreate.forEach(function (pair) {
-                self._createdSubClassKeys[subClassTripleKey(pair)] = 1;
+                self._createdSubClassKeys[self.getSubClassTripleKey(pair)] = 1;
             });
             callback(null, { created: insertedCount, skipped: skippedCount });
         });
@@ -1558,6 +1622,32 @@ var AlignmentWorkflow = (function () {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+    };
+
+    /**
+     * @function
+     * @name exportTriplesToCsv
+     * @memberof AlignmentWorkflow
+     * Downloads as CSV the triples the given pairs generate (subject / predicate / object only).
+     * @param {Array} pairs - Checked pairs with srcUri / tgtUri.
+     * @param {function} getTriple - pair -> { subject, predicate, object } | null.
+     * @param {string} fileName - The download file name.
+     * @returns {void}
+     */
+    self.exportTriplesToCsv = function (pairs, getTriple, fileName) {
+        var triples = [];
+        (pairs || []).forEach(function (pair) {
+            var triple = getTriple(pair);
+            if (triple) {
+                triples.push(triple);
+            }
+        });
+        var tripleColumns = [
+            { header: "subject", field: "subject" },
+            { header: "predicate", field: "predicate" },
+            { header: "object", field: "object" },
+        ];
+        self.exportPairsToCsv(triples, tripleColumns, fileName);
     };
 
     /**
